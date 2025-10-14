@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: screenshare-backend
+  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  
+  websocket:
+    allowed-origins: "http://localhost:3000"
+
+# AWS Configuration (for production)
+aws:
+  region: us-east-1
+  sqs:
+    queue-url: ${SQS_QUEUE_URL:}
+  sns:
+    topic-arn: ${SNS_TOPIC_ARN:}
+
+# Logging
+logging:
+  level:
+    com.screenshare: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
