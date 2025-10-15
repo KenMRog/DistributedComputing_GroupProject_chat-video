@@ -104,6 +104,18 @@ spring:
       ddl-auto: create-drop
     show-sql: true
 
+# Azure Configuration
+azure:
+  servicebus:
+    connection-string: ${AZURE_SERVICEBUS_CONNECTION_STRING:}
+    queue-name: ${AZURE_SERVICEBUS_QUEUE_NAME:helloworld-queue}
+    topic-name: ${AZURE_SERVICEBUS_TOPIC_NAME:helloworld-topic}
+    subscription-name: ${AZURE_SERVICEBUS_SUBSCRIPTION_NAME:helloworld-subscription}
+  eventgrid:
+    endpoint: ${AZURE_EVENTGRID_ENDPOINT:}
+    key: ${AZURE_EVENTGRID_KEY:}
+    topic-endpoint: ${AZURE_EVENTGRID_TOPIC_ENDPOINT:}
+
 # Logging
 logging:
   level:
