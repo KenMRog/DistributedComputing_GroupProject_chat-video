@@ -6,12 +6,23 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - DB_URL=jdbc:postgresql://db:5432/screenshare
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=password
-    depends_on:
-      - db
+      # Spring Profile: use 'production' for Azure SQL, 'dev' for H2
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-production}
+      
+      # Azure SQL Server Configuration (for production profile)
+      - AZURE_SQL_SERVER=${AZURE_SQL_SERVER:-screen-share.database.windows.net}
+      - AZURE_SQL_DATABASE=${AZURE_SQL_DATABASE:-CMPS-432}
+      - AZURE_SQL_USERNAME=${AZURE_SQL_USERNAME:-Screen-Share-Admin}
+      - AZURE_SQL_PASSWORD=${qrsiz.GaJ$X7.d3}
+      
+      # Azure Service Bus Configuration
+      - AZURE_SERVICEBUS_CONNECTION_STRING=${Endpoint=sb://cmps-432.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=32aWelfMfOgk+V+ziRaEk0V+BnpJJgEWg+ASbIaedkY=}
+      - AZURE_SERVICEBUS_QUEUE_NAME=${AZURE_SERVICEBUS_QUEUE_NAME:-screenshare-queue}
+      - AZURE_SERVICEBUS_TOPIC_NAME=${AZURE_SERVICEBUS_TOPIC_NAME:-screenshare-topic}
+      
+     
+      # WebSocket Configuration
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     volumes:
       - ./logs:/app/logs
 
@@ -23,17 +34,3 @@ services:
       - REACT_APP_API_URL=http://localhost:8080/api
     depends_on:
       - backend
-
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_DB=screenshare
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
