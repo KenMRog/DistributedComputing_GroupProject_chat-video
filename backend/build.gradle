@@ -34,6 +34,11 @@ dependencies {
     implementation 'software.amazon.awssdk:sqs:2.21.29'
     implementation 'software.amazon.awssdk:sns:2.21.29'
     
+    // Azure SDK
+    implementation 'com.azure:azure-messaging-servicebus:7.15.0'
+    implementation 'com.azure:azure-messaging-eventgrid:4.21.0'
+    implementation 'com.azure:azure-core:1.45.0'
+    
     // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     
