@@ -10,6 +10,18 @@ services:
       - DB_URL=jdbc:postgresql://db:5432/screenshare
       - DB_USERNAME=postgres
       - DB_PASSWORD=password
+      # Azure Service Bus Configuration
+      - AZURE_SERVICEBUS_CONNECTION_STRING=${AZURE_SERVICEBUS_CONNECTION_STRING}
+      - AZURE_SERVICEBUS_QUEUE_NAME=${AZURE_SERVICEBUS_QUEUE_NAME:-helloworld-queue}
+      - AZURE_SERVICEBUS_TOPIC_NAME=${AZURE_SERVICEBUS_TOPIC_NAME:-helloworld-topic}
+      - AZURE_SERVICEBUS_SUBSCRIPTION_NAME=${AZURE_SERVICEBUS_SUBSCRIPTION_NAME:-helloworld-subscription}
+      # Azure Event Grid Configuration
+      - AZURE_EVENTGRID_ENDPOINT=${AZURE_EVENTGRID_ENDPOINT}
+      - AZURE_EVENTGRID_KEY=${AZURE_EVENTGRID_KEY}
+      - AZURE_EVENTGRID_TOPIC_ENDPOINT=${AZURE_EVENTGRID_TOPIC_ENDPOINT}
+      # AWS Configuration (Optional)
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
+      - SNS_TOPIC_ARN=${SNS_TOPIC_ARN}
     depends_on:
       - db
     volumes:

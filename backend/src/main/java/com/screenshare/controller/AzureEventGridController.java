@@ -1,15 +1,20 @@
 package com.screenshare.controller;
 
 import com.azure.messaging.eventgrid.EventGridEvent;
+import com.azure.messaging.eventgrid.systemevents.SubscriptionValidationEventData;
 import com.screenshare.model.HelloWorldEvent;
 import com.screenshare.service.AzureEventGridPublisher;
 import com.screenshare.service.AzureEventGridSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,13 +29,16 @@ public class AzureEventGridController {
     
     private final AzureEventGridPublisher eventGridPublisher;
     private final AzureEventGridSubscriber eventGridSubscriber;
+    private final ObjectMapper objectMapper;
     
     @Autowired
     public AzureEventGridController(
-            AzureEventGridPublisher eventGridPublisher,
-            AzureEventGridSubscriber eventGridSubscriber) {
-        this.eventGridPublisher = eventGridPublisher;
+            org.springframework.beans.factory.ObjectProvider<AzureEventGridPublisher> eventGridPublisherProvider,
+            AzureEventGridSubscriber eventGridSubscriber,
+            ObjectMapper objectMapper) {
+        this.eventGridPublisher = eventGridPublisherProvider.getIfAvailable();
         this.eventGridSubscriber = eventGridSubscriber;
+        this.objectMapper = objectMapper;
     }
     
     /**
@@ -42,6 +50,11 @@ public class AzureEventGridController {
         Map<String, Object> response = new HashMap<>();
         
         try {
+            if (eventGridPublisher == null) {
+                response.put("success", false);
+                response.put("message", "Azure Event Grid publisher is not configured");
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+            }
             HelloWorldEvent event = new HelloWorldEvent(
                     "HelloWorld.Event",
                     "/helloworld/greeting",
@@ -73,6 +86,11 @@ public class AzureEventGridController {
         Map<String, Object> response = new HashMap<>();
         
         try {
+            if (eventGridPublisher == null) {
+                response.put("success", false);
+                response.put("message", "Azure Event Grid publisher is not configured");
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+            }
             HelloWorldEvent event = new HelloWorldEvent(
                     "HelloWorld.Topic.Event",
                     "/helloworld/topic/greeting",
@@ -104,6 +122,11 @@ public class AzureEventGridController {
         Map<String, Object> response = new HashMap<>();
         
         try {
+            if (eventGridPublisher == null) {
+                response.put("success", false);
+                response.put("message", "Azure Event Grid publisher is not configured");
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+            }
             eventGridPublisher.publishEvent(event);
             
             response.put("success", true);
@@ -129,6 +152,11 @@ public class AzureEventGridController {
         Map<String, Object> response = new HashMap<>();
         
         try {
+            if (eventGridPublisher == null) {
+                response.put("success", false);
+                response.put("message", "Azure Event Grid publisher is not configured");
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+            }
             eventGridPublisher.publishEventToTopic(event);
             
             response.put("success", true);
@@ -150,16 +178,55 @@ public class AzureEventGridController {
      * POST /api/azure/eventgrid/webhook
      */
     @PostMapping("/webhook")
-    public ResponseEntity<Map<String, String>> handleEventGridWebhook(@RequestBody List<EventGridEvent> events) {
+    public ResponseEntity<?> handleEventGridWebhook(
+            @RequestHeader(value = "aeg-event-type", required = false) String aegEventType,
+            @RequestBody String requestBody) {
         Map<String, String> response = new HashMap<>();
-        
+
         try {
-            logger.info("Received {} events from Event Grid webhook", events.size());
-            eventGridSubscriber.handleEvents(events);
-            
+            logger.info("Received Event Grid webhook. aeg-event-type={}", aegEventType);
+
+            // Handle subscription validation handshake
+            if ("SubscriptionValidation".equalsIgnoreCase(aegEventType)) {
+                JsonNode root = objectMapper.readTree(requestBody);
+                if (root.isArray() && root.size() > 0) {
+                    JsonNode dataNode = root.get(0).path("data");
+                    String validationCode = dataNode.path("validationCode").asText(null);
+                    if (validationCode == null) {
+                        logger.error("Validation payload missing validationCode. Payload: {}", requestBody);
+                        response.put("status", "error");
+                        response.put("message", "Missing validationCode in payload");
+                        return ResponseEntity.badRequest().body(response);
+                    }
+                    logger.info("Responding to subscription validation with code: {}", validationCode);
+                    Map<String, String> validationResponse = new HashMap<>();
+                    validationResponse.put("validationResponse", validationCode);
+                    return ResponseEntity.ok(validationResponse);
+                } else {
+                    logger.error("Validation payload is not an array or is empty. Payload: {}", requestBody);
+                    response.put("status", "error");
+                    response.put("message", "Invalid validation payload");
+                    return ResponseEntity.badRequest().body(response);
+                }
+            }
+
+            // Normal notification events
+            logger.debug("Notification payload: {}", requestBody);
+            // Best-effort: parse into EventGridEvent list if possible, otherwise just acknowledge
+            try {
+                List<EventGridEvent> events = objectMapper.readValue(
+                        requestBody,
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, EventGridEvent.class)
+                );
+                logger.info("Parsed {} notification events", events.size());
+                eventGridSubscriber.handleEvents(events);
+            } catch (Exception parseEx) {
+                // Do not fail the delivery if parsing fails; log and ack to avoid retries during development
+                logger.warn("Failed to parse notification events to EventGridEvent. Will ack anyway. Error: {}", parseEx.getMessage());
+            }
+
             response.put("status", "success");
             response.put("message", "Events processed successfully");
-            
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error handling webhook events", e);

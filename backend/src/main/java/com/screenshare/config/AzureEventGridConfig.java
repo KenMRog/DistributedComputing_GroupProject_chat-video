@@ -6,6 +6,7 @@ import com.azure.messaging.eventgrid.EventGridPublisherClientBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,46 +15,57 @@ public class AzureEventGridConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(AzureEventGridConfig.class);
     
-    @Value("${azure.eventgrid.endpoint:}")
+    @Value("${azure.eventgrid.endpoint:#{null}}")
     private String endpoint;
     
-    @Value("${azure.eventgrid.key:}")
+    @Value("${azure.eventgrid.key:#{null}}")
     private String key;
     
-    @Value("${azure.eventgrid.topic-endpoint:}")
+    // Support both kebab-case and dotted nested property names for topic endpoint
+    // This improves compatibility with environment variable relaxed binding
+    @Value("${azure.eventgrid.topic-endpoint:${azure.eventgrid.topic.endpoint:#{null}}}")
     private String topicEndpoint;
     
     @Bean
+    @ConditionalOnProperty(name = {"azure.eventgrid.endpoint", "azure.eventgrid.key"})
     public EventGridPublisherClient eventGridPublisherClient() {
-        if (endpoint == null || endpoint.isEmpty() || key == null || key.isEmpty()) {
-            logger.warn("Azure Event Grid endpoint or key is not configured");
-            return null;
-        }
-        
         logger.info("Creating Event Grid Publisher Client for endpoint: {}", endpoint);
         return new EventGridPublisherClientBuilder()
                 .endpoint(endpoint)
                 .credential(new AzureKeyCredential(key))
-                .buildClient();
+                .buildEventGridEventPublisherClient();
     }
     
     @Bean
+    @ConditionalOnProperty(name = {"azure.eventgrid.topic-endpoint", "azure.eventgrid.key"})
     public EventGridPublisherClient eventGridTopicPublisherClient() {
-        if (topicEndpoint == null || topicEndpoint.isEmpty() || key == null || key.isEmpty()) {
-            logger.warn("Azure Event Grid topic endpoint or key is not configured");
-            return null;
-        }
-        
         logger.info("Creating Event Grid Topic Publisher Client for endpoint: {}", topicEndpoint);
         return new EventGridPublisherClientBuilder()
                 .endpoint(topicEndpoint)
                 .credential(new AzureKeyCredential(key))
-                .buildClient();
+                .buildEventGridEventPublisherClient();
+    }
+
+    // Alternate conditional to support property style: azure.eventgrid.topic.endpoint
+    // Define the same bean name so the service can @Qualifier("eventGridTopicPublisherClient") consistently
+    @Bean(name = "eventGridTopicPublisherClient")
+    @ConditionalOnProperty(name = {"azure.eventgrid.topic.endpoint", "azure.eventgrid.key"})
+    public EventGridPublisherClient eventGridTopicPublisherClientAlt() {
+        logger.info("Creating Event Grid Topic Publisher Client (alt) for endpoint: {}", topicEndpoint);
+        return new EventGridPublisherClientBuilder()
+                .endpoint(topicEndpoint)
+                .credential(new AzureKeyCredential(key))
+                .buildEventGridEventPublisherClient();
     }
     
     @Bean
     public String eventGridEndpoint() {
         return endpoint;
+    }
+    
+    @Bean
+    public String eventGridKey() {
+        return key;
     }
     
     @Bean

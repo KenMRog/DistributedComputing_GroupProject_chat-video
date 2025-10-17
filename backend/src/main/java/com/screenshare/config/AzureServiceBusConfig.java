@@ -6,6 +6,7 @@ import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,25 +15,21 @@ public class AzureServiceBusConfig {
     
     private static final Logger logger = LoggerFactory.getLogger(AzureServiceBusConfig.class);
     
-    @Value("${azure.servicebus.connection-string:}")
+    @Value("${azure.servicebus.connection-string:#{null}}")
     private String connectionString;
     
-    @Value("${azure.servicebus.queue-name}")
+    @Value("${azure.servicebus.queue-name:helloworld-queue}")
     private String queueName;
     
-    @Value("${azure.servicebus.topic-name}")
+    @Value("${azure.servicebus.topic-name:helloworld-topic}")
     private String topicName;
     
-    @Value("${azure.servicebus.subscription-name}")
+    @Value("${azure.servicebus.subscription-name:helloworld-subscription}")
     private String subscriptionName;
     
     @Bean
+    @ConditionalOnProperty(name = "azure.servicebus.connection-string")
     public ServiceBusSenderClient serviceBusQueueSenderClient() {
-        if (connectionString == null || connectionString.isEmpty()) {
-            logger.warn("Azure Service Bus connection string is not configured");
-            return null;
-        }
-        
         logger.info("Creating Service Bus Queue Sender Client for queue: {}", queueName);
         return new ServiceBusClientBuilder()
                 .connectionString(connectionString)
@@ -42,12 +39,8 @@ public class AzureServiceBusConfig {
     }
     
     @Bean
+    @ConditionalOnProperty(name = "azure.servicebus.connection-string")
     public ServiceBusSenderClient serviceBusTopicSenderClient() {
-        if (connectionString == null || connectionString.isEmpty()) {
-            logger.warn("Azure Service Bus connection string is not configured");
-            return null;
-        }
-        
         logger.info("Creating Service Bus Topic Sender Client for topic: {}", topicName);
         return new ServiceBusClientBuilder()
                 .connectionString(connectionString)
