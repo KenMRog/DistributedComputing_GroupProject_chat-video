@@ -8,13 +8,18 @@ import com.screenshare.model.HelloWorldEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.lang.Nullable;
 
 import java.time.OffsetDateTime;
 import java.util.Collections;
+import java.util.UUID;
 
 @Service
+@ConditionalOnProperty(name = {"azure.eventgrid.endpoint", "azure.eventgrid.key"}, matchIfMissing = false)
 public class AzureEventGridPublisher {
     
     private static final Logger logger = LoggerFactory.getLogger(AzureEventGridPublisher.class);
@@ -26,10 +31,10 @@ public class AzureEventGridPublisher {
     @Autowired
     public AzureEventGridPublisher(
             @Qualifier("eventGridPublisherClient") EventGridPublisherClient publisherClient,
-            @Qualifier("eventGridTopicPublisherClient") EventGridPublisherClient topicPublisherClient,
+            @Qualifier("eventGridTopicPublisherClient") ObjectProvider<EventGridPublisherClient> topicPublisherClientProvider,
             ObjectMapper objectMapper) {
         this.publisherClient = publisherClient;
-        this.topicPublisherClient = topicPublisherClient;
+        this.topicPublisherClient = topicPublisherClientProvider.getIfAvailable();
         this.objectMapper = objectMapper;
     }
     
@@ -43,6 +48,14 @@ public class AzureEventGridPublisher {
         }
         
         try {
+            // Ensure ID and EventTime are present for robustness when receiving partial payloads
+            if (helloWorldEvent.getId() == null || helloWorldEvent.getId().isBlank()) {
+                helloWorldEvent.setId(UUID.randomUUID().toString());
+            }
+            if (helloWorldEvent.getEventTime() == null || helloWorldEvent.getEventTime().isBlank()) {
+                helloWorldEvent.setEventTime(java.time.Instant.now().toString());
+            }
+
             EventGridEvent event = new EventGridEvent(
                     helloWorldEvent.getSubject(),
                     helloWorldEvent.getEventType(),
@@ -70,6 +83,14 @@ public class AzureEventGridPublisher {
         }
         
         try {
+            // Ensure ID and EventTime are present for robustness when receiving partial payloads
+            if (helloWorldEvent.getId() == null || helloWorldEvent.getId().isBlank()) {
+                helloWorldEvent.setId(UUID.randomUUID().toString());
+            }
+            if (helloWorldEvent.getEventTime() == null || helloWorldEvent.getEventTime().isBlank()) {
+                helloWorldEvent.setEventTime(java.time.Instant.now().toString());
+            }
+
             EventGridEvent event = new EventGridEvent(
                     helloWorldEvent.getSubject(),
                     helloWorldEvent.getEventType(),

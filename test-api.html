@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Service Bus & Event Grid API Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        button {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button.post-btn {
+            background: #10b981;
+        }
+        
+        button.post-btn:hover {
+            background: #059669;
+        }
+        
+        .response {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: none;
+        }
+        
+        .response.show {
+            display: block;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .status.success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status.error {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .status.pending {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .clear-btn {
+            background: #6b7280;
+            margin-top: 10px;
+        }
+        
+        .clear-btn:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔷 Azure Service Bus & Event Grid API Tester</h1>
+        <p class="subtitle">Test your Azure integration REST endpoints</p>
+        
+        <!-- Service Bus Queue Section -->
+        <div class="section">
+            <h2>📬 Service Bus Queue</h2>
+            <div class="buttons">
+                <button onclick="testEndpoint('servicebus-queue-hello', '/azure/servicebus/queue/hello')">
+                    Send Hello World
+                </button>
+                <button class="post-btn" onclick="testCustomQueueMessage()">
+                    Send Custom Message
+                </button>
+            </div>
+            <div id="response-servicebus-queue-hello" class="response"></div>
+        </div>
+        
+        <!-- Service Bus Topic Section -->
+        <div class="section">
+            <h2>📡 Service Bus Topic</h2>
+            <div class="buttons">
+                <button onclick="testEndpoint('servicebus-topic-hello', '/azure/servicebus/topic/hello')">
+                    Send Hello World
+                </button>
+                <button class="post-btn" onclick="testCustomTopicMessage()">
+                    Send Custom Message
+                </button>
+            </div>
+            <div id="response-servicebus-topic-hello" class="response"></div>
+        </div>
+        
+        <!-- Event Grid Domain Section -->
+        <div class="section">
+            <h2>🌐 Event Grid Domain</h2>
+            <div class="buttons">
+                <button onclick="testEndpoint('eventgrid-domain-hello', '/azure/eventgrid/publish/hello')">
+                    Publish Hello Event
+                </button>
+                <button class="post-btn" onclick="testCustomDomainEvent()">
+                    Publish Custom Event
+                </button>
+            </div>
+            <div id="response-eventgrid-domain-hello" class="response"></div>
+        </div>
+        
+        <!-- Event Grid Topic Section -->
+        <div class="section">
+            <h2>🎯 Event Grid Topic</h2>
+            <div class="buttons">
+                <button onclick="testEndpoint('eventgrid-topic-hello', '/azure/eventgrid/topic/hello')">
+                    Publish Hello Event
+                </button>
+                <button class="post-btn" onclick="testCustomTopicEvent()">
+                    Publish Custom Event
+                </button>
+            </div>
+            <div id="response-eventgrid-topic-hello" class="response"></div>
+        </div>
+        
+        <!-- Event Grid Webhook Section -->
+        <div class="section">
+            <h2>🔔 Event Grid Webhook</h2>
+            <div class="buttons">
+                <button class="post-btn" onclick="testWebhook()">
+                    Send Webhook Event
+                </button>
+            </div>
+            <div id="response-webhook" class="response"></div>
+        </div>
+        
+        <!-- Health Check Section -->
+        <div class="section">
+            <h2>❤️ Health Check</h2>
+            <div class="buttons">
+                <button onclick="testEndpoint('health', '/actuator/health')">
+                    Check Backend Health
+                </button>
+            </div>
+            <div id="response-health" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:8080/api';
+        
+        async function testEndpoint(id, endpoint, method = 'GET', body = null) {
+            const responseDiv = document.getElementById(`response-${id}`);
+            responseDiv.innerHTML = '<span class="status pending">Loading...<span class="loader"></span></span>';
+            responseDiv.classList.add('show');
+            
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                
+                const response = await fetch(BASE_URL + endpoint, options);
+                const data = await response.json();
+                
+                const statusClass = response.ok ? 'success' : 'error';
+                const statusText = response.ok ? '✅ SUCCESS' : '❌ ERROR';
+                
+                responseDiv.innerHTML = `
+                    <span class="status ${statusClass}">${statusText} (${response.status})</span>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <button class="clear-btn" onclick="clearResponse('${id}')">Clear</button>
+                `;
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <span class="status error">❌ ERROR</span>
+                    <pre>Error: ${error.message}\n\nMake sure the backend is running:\ndocker-compose up backend</pre>
+                    <button class="clear-btn" onclick="clearResponse('${id}')">Clear</button>
+                `;
+            }
+        }
+        
+        function clearResponse(id) {
+            const responseDiv = document.getElementById(`response-${id}`);
+            responseDiv.classList.remove('show');
+        }
+        
+        function testCustomQueueMessage() {
+            const message = {
+                message: "Custom queue message from browser",
+                sender: "Browser Test"
+            };
+            testEndpoint('servicebus-queue-hello', '/azure/servicebus/queue/send', 'POST', message);
+        }
+        
+        function testCustomTopicMessage() {
+            const message = {
+                message: "Custom topic broadcast from browser",
+                sender: "Browser Test"
+            };
+            testEndpoint('servicebus-topic-hello', '/azure/servicebus/topic/send', 'POST', message);
+        }
+        
+        function testCustomDomainEvent() {
+            const event = {
+                eventType: "Browser.Custom.Event",
+                subject: "/browser/test",
+                data: "Custom event from browser test"
+            };
+            testEndpoint('eventgrid-domain-hello', '/azure/eventgrid/publish', 'POST', event);
+        }
+        
+        function testCustomTopicEvent() {
+            const event = {
+                eventType: "Browser.Topic.Event",
+                subject: "/browser/topic/test",
+                data: "Custom topic event from browser"
+            };
+            testEndpoint('eventgrid-topic-hello', '/azure/eventgrid/topic/publish', 'POST', event);
+        }
+        
+        function testWebhook() {
+            const events = [{
+                id: "browser-test-" + Date.now(),
+                eventType: "Browser.Webhook.Test",
+                subject: "/webhook/browser",
+                eventTime: new Date().toISOString(),
+                data: {
+                    message: "Webhook event from browser",
+                    timestamp: Date.now()
+                },
+                dataVersion: "1.0"
+            }];
+            testEndpoint('webhook', '/azure/eventgrid/webhook', 'POST', events);
+        }
+        
+        // Test health on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testEndpoint('health', '/actuator/health');
+            }, 500);
+        });
+    </script>
+</body>
+</html>
