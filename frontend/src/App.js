@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box, Container, Typography, Tabs, Tab } from '@mui/material';
-import ChatComponent from './components/ChatComponent';
+import { Box, Container, Typography, Tabs, Tab, Button, AppBar, Toolbar, IconButton } from '@mui/material';
+import { Logout as LogoutIcon, Person as PersonIcon } from '@mui/icons-material';
+import ChatSidebar from './components/ChatSidebar';
+import ChatMain from './components/ChatMain';
 import ScreenShareComponent from './components/ScreenShareComponent';
+import AuthGuard from './components/AuthGuard';
 import { SocketProvider } from './context/SocketContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import './App.css';
 
 const theme = createTheme({
@@ -41,40 +45,82 @@ function TabPanel({ children, value, index, ...other }) {
   );
 }
 
-function App() {
+function AppContent() {
   const [currentTab, setCurrentTab] = useState(0);
+  const [selectedChat, setSelectedChat] = useState(null);
+  const { user, logout } = useAuth();
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
   };
 
+  const handleLogout = () => {
+    logout();
+  };
+
+  const handleChatSelect = (chat) => {
+    setSelectedChat(chat);
+  };
+
+  return (
+    <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AppBar position="static" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+        <Toolbar>
+          <Typography variant="h5" component="h1" sx={{ flexGrow: 1, color: 'primary.main' }}>
+            ScreenShare App
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PersonIcon color="primary" />
+              <Typography variant="body2" color="text.secondary">
+                {user?.name || user?.email}
+              </Typography>
+            </Box>
+            <IconButton onClick={handleLogout} color="primary" title="Logout">
+              <LogoutIcon />
+            </IconButton>
+          </Box>
+        </Toolbar>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Container maxWidth="xl">
+            <Tabs value={currentTab} onChange={handleTabChange} aria-label="app tabs">
+              <Tab label="Chat" />
+              <Tab label="Screen Share" />
+            </Tabs>
+          </Container>
+        </Box>
+      </AppBar>
+      
+      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex' }}>
+        {currentTab === 0 ? (
+          <>
+            <ChatSidebar 
+              selectedChatId={selectedChat?.id} 
+              onChatSelect={handleChatSelect}
+            />
+            <ChatMain selectedChat={selectedChat} user={user} />
+          </>
+        ) : (
+          <Box sx={{ flexGrow: 1 }}>
+            <ScreenShareComponent />
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <SocketProvider>
-        <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-            <Container maxWidth="xl">
-              <Typography variant="h4" component="h1" sx={{ py: 2, color: 'primary.main' }}>
-                ScreenShare App
-              </Typography>
-              <Tabs value={currentTab} onChange={handleTabChange} aria-label="app tabs">
-                <Tab label="Chat" />
-                <Tab label="Screen Share" />
-              </Tabs>
-            </Container>
-          </Box>
-          
-          <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-            <TabPanel value={currentTab} index={0}>
-              <ChatComponent />
-            </TabPanel>
-            <TabPanel value={currentTab} index={1}>
-              <ScreenShareComponent />
-            </TabPanel>
-          </Box>
-        </Box>
-      </SocketProvider>
+      <AuthProvider>
+        <AuthGuard>
+          <SocketProvider>
+            <AppContent />
+          </SocketProvider>
+        </AuthGuard>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

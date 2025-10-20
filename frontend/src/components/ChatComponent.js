@@ -12,16 +12,20 @@ import {
   Chip,
   Grid,
 } from '@mui/material';
-import { Send as SendIcon } from '@mui/icons-material';
+import { Send as SendIcon, Person as PersonIcon } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 
-const ChatComponent = () => {
+const ChatComponent = ({ chatRoom }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [username, setUsername] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
   const { connected, sendMessage, subscribe } = useSocket();
+  const { user } = useAuth();
+  
+  // Get username from authenticated user
+  const username = user?.username || user?.name || 'Anonymous';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -32,13 +36,22 @@ const ChatComponent = () => {
   }, [messages]);
 
   useEffect(() => {
-    if (connected && subscribe) {
-      const subscription = subscribe('/topic/public', (message) => {
+    if (connected && subscribe && username && chatRoom) {
+      const topic = `/topic/chat/${chatRoom.id}`;
+      const subscription = subscribe(topic, (message) => {
         const receivedMessage = JSON.parse(message.body);
         setMessages(prev => [...prev, receivedMessage]);
       });
       
       setIsConnected(true);
+      
+      // Automatically join chat when connected
+      const joinMessage = {
+        content: '',
+        sender: username,
+        type: 'JOIN'
+      };
+      sendMessage(`/app/chat/${chatRoom.id}/addUser`, joinMessage);
       
       return () => {
         if (subscription) {
@@ -46,31 +59,19 @@ const ChatComponent = () => {
         }
       };
     }
-  }, [connected, subscribe]);
+  }, [connected, subscribe, username, sendMessage, chatRoom]);
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (newMessage.trim() && username.trim()) {
+    if (newMessage.trim() && username && chatRoom) {
       const message = {
         content: newMessage,
         sender: username,
         type: 'CHAT'
       };
       
-      sendMessage('/app/chat.sendMessage', message);
+      sendMessage(`/app/chat/${chatRoom.id}/sendMessage`, message);
       setNewMessage('');
-    }
-  };
-
-  const handleJoinChat = () => {
-    if (username.trim()) {
-      const joinMessage = {
-        content: '',
-        sender: username,
-        type: 'JOIN'
-      };
-      
-      sendMessage('/app/chat.addUser', joinMessage);
     }
   };
 
@@ -82,49 +83,39 @@ const ChatComponent = () => {
     );
   }
 
-  if (!username) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-        <Paper sx={{ p: 4, maxWidth: 400, width: '100%' }}>
-          <Typography variant="h5" gutterBottom align="center">
-            Join Chat
-          </Typography>
-          <TextField
-            fullWidth
-            label="Enter your username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleJoinChat()}
-            sx={{ mb: 2 }}
-          />
-          <Button
-            fullWidth
-            variant="contained"
-            onClick={handleJoinChat}
-            disabled={!username.trim()}
-          >
-            Join Chat
-          </Button>
-        </Paper>
-      </Box>
-    );
-  }
+  const getOtherUser = () => {
+    if (chatRoom && chatRoom.members && chatRoom.members.length === 2) {
+      return chatRoom.members.find(member => member.id !== user.id);
+    }
+    return null;
+  };
+
+  const otherUser = getOtherUser();
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Paper sx={{ p: 2, mb: 2 }}>
+      {/* Chat Header */}
+      <Paper sx={{ p: 2, mb: 2, borderRadius: 0 }}>
         <Grid container spacing={2} alignItems="center">
+          <Grid item>
+            <Avatar sx={{ bgcolor: 'primary.main' }}>
+              {otherUser ? (otherUser.displayName || otherUser.username).charAt(0).toUpperCase() : <PersonIcon />}
+            </Avatar>
+          </Grid>
+          <Grid item xs>
+            <Typography variant="h6">
+              {otherUser ? (otherUser.displayName || otherUser.username) : chatRoom?.name || 'Chat'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {otherUser ? (otherUser.username) : ''}
+            </Typography>
+          </Grid>
           <Grid item>
             <Chip
               label={isConnected ? 'Connected' : 'Disconnected'}
               color={isConnected ? 'success' : 'error'}
               size="small"
             />
-          </Grid>
-          <Grid item>
-            <Typography variant="subtitle1">
-              Welcome, {username}!
-            </Typography>
           </Grid>
         </Grid>
       </Paper>
