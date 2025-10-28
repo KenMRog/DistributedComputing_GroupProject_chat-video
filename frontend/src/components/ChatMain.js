@@ -45,10 +45,10 @@ const ChatMain = ({ selectedChat, user }) => {
             <ChatIcon sx={{ fontSize: 40 }} />
           </Avatar>
           <Typography variant="h4" gutterBottom color="text.primary">
-            You look great today, {user?.name || user?.username || 'User'}!
+            Hello, {user?.name || user?.username || 'User'}!
           </Typography>
           <Typography variant="h6" color="text.secondary">
-            Pop open a chat to start the conversation.
+            Open a chat to start the conversation.
           </Typography>
         </Paper>
       </Box>

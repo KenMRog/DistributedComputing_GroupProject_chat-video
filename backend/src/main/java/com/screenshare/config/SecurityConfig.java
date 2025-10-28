@@ -20,6 +20,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+            // Enable CORS so the CorsConfigurationSource bean is used
+            .cors().and()
+
             // Disable CSRF protection (useful for APIs and WebSocket connections)
             .csrf(AbstractHttpConfigurer::disable)
             

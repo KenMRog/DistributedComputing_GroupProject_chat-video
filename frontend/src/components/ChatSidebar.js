@@ -30,6 +30,7 @@ import {
   Person as PersonIcon,
   Chat as ChatIcon,
   Notifications as NotificationsIcon,
+  Mail as MailIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 
@@ -38,6 +39,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingInvites, setPendingInvites] = useState([]);
   const [newChatDialogOpen, setNewChatDialogOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [allUsers, setAllUsers] = useState([]);
@@ -72,13 +74,13 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   // Fetch all users for new chat
   const fetchAllUsers = async () => {
     try {
-      // This would need to be implemented in the backend
-      // For now, we'll use a mock list
-      setAllUsers([
-        { id: 1, username: 'john_doe', displayName: 'John Doe' },
-        { id: 2, username: 'jane_smith', displayName: 'Jane Smith' },
-        { id: 3, username: 'bob_wilson', displayName: 'Bob Wilson' },
-      ]);
+      const response = await fetch('http://localhost:8080/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data);
+      } else {
+        console.error('Error fetching users:', response.statusText);
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -96,7 +98,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     if (!selectedUserId) return;
 
     try {
-      const response = await fetch('http://localhost:8080/api/chat/invite', {
+      const response = await fetch(`http://localhost:8080/api/chat/invite?inviterId=${user.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,9 +186,14 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           <Typography variant="h6" component="h1">
             Chats
           </Typography>
-          <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary">
-            <AddIcon />
-          </IconButton>
+          <Box>
+            <IconButton onClick={() => setInboxOpen(true)} color="primary" sx={{ mr: 1 }} title="Inbox">
+              <MailIcon />
+            </IconButton>
+            <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary">
+              <AddIcon />
+            </IconButton>
+          </Box>
         </Box>
         
         {/* Search */}
@@ -316,6 +323,40 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           <Button onClick={handleNewChat} variant="contained" disabled={!selectedUserId}>
             Send Invite
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Inbox Dialog */}
+      <Dialog open={inboxOpen} onClose={() => setInboxOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Inbox</DialogTitle>
+        <DialogContent>
+          {pendingInvites.length === 0 && (
+            <Typography variant="body2">No pending invites</Typography>
+          )}
+
+          {pendingInvites.map((invite) => (
+            <Box key={invite.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                {invite.inviter.displayName || invite.inviter.username} wants to chat
+              </Typography>
+              {invite.message && (
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                  "{invite.message}"
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button size="small" variant="contained" onClick={() => { handleAcceptInvite(invite.id); setInboxOpen(false); }}>
+                  Accept
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => { handleDeclineInvite(invite.id); }}>
+                  Decline
+                </Button>
+              </Box>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInboxOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
