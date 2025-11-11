@@ -32,7 +32,7 @@ public class ScreenShareController {
         private String action;
         private String userId;
         private String roomId;
-        private String data; // Base64 encoded screen data
+        private String data; 
 
         // Getters and setters
         public String getAction() { return action; }

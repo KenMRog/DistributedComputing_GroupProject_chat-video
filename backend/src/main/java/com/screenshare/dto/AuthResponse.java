@@ -7,7 +7,7 @@ public class AuthResponse {
     private boolean success;
     private String message;
     private UserData user;
-    private String token; // For future JWT implementation
+    private String token; 
     
     // Constructors
     public AuthResponse() {}

@@ -50,7 +50,7 @@ public class ChatMessage {
     @JoinColumn(name = "reply_to_message_id")
     private ChatMessage replyToMessage;
 
-    // File/media attachments
+    
     @Column(length = 500)
     private String attachmentUrl;
 
@@ -58,10 +58,10 @@ public class ChatMessage {
     private String attachmentName;
 
     @Column(length = 50)
-    private String attachmentType; // mime type
+    private String attachmentType;
 
     @Column
-    private Long attachmentSize; // in bytes
+    private Long attachmentSize;
 
     // Message status
     @Column(nullable = false)

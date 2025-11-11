@@ -38,7 +38,7 @@ public class ChatInvite {
     private InviteStatus status = InviteStatus.PENDING;
 
     @Column(length = 500)
-    private String message; // Optional message from inviter
+    private String message; 
 
     @Column
     private LocalDateTime expiresAt;

@@ -17,6 +17,10 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     // Find rooms where user is a member
     @Query("SELECT cr FROM ChatRoom cr JOIN cr.members m WHERE m.id = :userId AND cr.isActive = true ORDER BY cr.lastActivityAt DESC")
     List<ChatRoom> findRoomsByUserId(@Param("userId") Long userId);
+
+    // Find rooms visible to a user: all PUBLIC rooms plus rooms where the user is a member
+    @Query("SELECT DISTINCT cr FROM ChatRoom cr LEFT JOIN cr.members m WHERE (cr.roomType = com.screenshare.entity.RoomType.PUBLIC AND cr.isActive = true) OR (m.id = :userId AND cr.isActive = true) ORDER BY cr.lastActivityAt DESC")
+    List<ChatRoom> findVisibleRoomsForUser(@Param("userId") Long userId);
     
     // Find direct message room between two users
     @Query("SELECT cr FROM ChatRoom cr WHERE cr.roomType = 'DIRECT_MESSAGE' AND cr.isActive = true " +

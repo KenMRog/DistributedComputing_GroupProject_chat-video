@@ -31,13 +31,13 @@ public class ChatService {
     private UserRepository userRepository;
 
     // Create a direct message chat between two users
-    public ChatRoom createDirectMessageChat(Long userId1, Long userId2) {
+    public ChatRoom createDirectMessageChat(Long userId1, Long userId2, String description) {
         // Check if direct message already exists
         Optional<ChatRoom> existingRoom = chatRoomRepository.findDirectMessageRoom(userId1, userId2);
         if (existingRoom.isPresent()) {
             return existingRoom.get();
         }
-    // If no existing active DM, create an *inactive* chat room for the invite.
+    // If no existing active DM
     User inviter = userRepository.findById(userId1)
         .orElseThrow(() -> new RuntimeException("User not found: " + userId1));
     User invited = userRepository.findById(userId2)
@@ -50,31 +50,73 @@ public class ChatService {
     chatRoom.setRoomType(RoomType.DIRECT_MESSAGE);
     chatRoom.setMaxMembers(2);
     chatRoom.setCreatedBy(inviter);
-    // Use invited user's display name as placeholder (room name will be set when activated)
+    // Use invited user's display name as placeholder 
     chatRoom.setName(invited.getDisplayName() != null ? invited.getDisplayName() : invited.getUsername());
-    // IMPORTANT: keep the room inactive until the invite is accepted so it doesn't appear
+    chatRoom.setDescription(description);
     chatRoom.setIsActive(false);
-
-    // Do NOT add members yet; members will be added when invite is accepted
 
     return chatRoomRepository.save(chatRoom);
     }
 
     // Get all chat rooms for a user
     public List<ChatRoom> getUserChatRooms(Long userId) {
-        return chatRoomRepository.findRoomsByUserId(userId);
+        return chatRoomRepository.findVisibleRoomsForUser(userId);
+    }
+
+    // Create a group chat. The roomType is immutable after creation.
+    public ChatRoom createGroupChat(Long creatorId, String name, String description, boolean isPrivate) {
+        User creator = userRepository.findById(creatorId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + creatorId));
+
+        String roomCode = generateGroupRoomCode();
+
+        ChatRoom chatRoom = new ChatRoom();
+        chatRoom.setRoomCode(roomCode);
+        chatRoom.setName(name != null && !name.isEmpty() ? name : "Untitled Room");
+        chatRoom.setDescription(description);
+        chatRoom.setCreatedBy(creator);
+        chatRoom.addAdmin(creator);
+        chatRoom.addMember(creator);
+        chatRoom.setIsActive(true);
+        chatRoom.setRoomType(isPrivate ? RoomType.PRIVATE : RoomType.PUBLIC);
+
+        return chatRoomRepository.save(chatRoom);
+    }
+
+    // Join a public room. Returns the updated room.
+    public ChatRoom joinPublicRoom(Long roomId, Long userId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+
+        if (!room.getIsActive()) {
+            throw new RuntimeException("Room is not active");
+        }
+
+        if (room.getRoomType() != RoomType.PUBLIC) {
+            throw new RuntimeException("Only public rooms can be joined without an invite");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
+        if (!room.isMember(user)) {
+            room.addMember(user);
+            chatRoomRepository.save(room);
+        }
+
+        return room;
     }
 
     // Create a chat invite
-    public ChatInvite createChatInvite(Long inviterId, Long invitedUserId, String message) {
+    public ChatInvite createChatInvite(Long inviterId, Long invitedUserId, String description) {
         // Get users
         User inviter = userRepository.findById(inviterId)
                 .orElseThrow(() -> new RuntimeException("Inviter not found: " + inviterId));
         User invitedUser = userRepository.findById(invitedUserId)
                 .orElseThrow(() -> new RuntimeException("Invited user not found: " + invitedUserId));
 
-        // Create or get direct message room
-        ChatRoom chatRoom = createDirectMessageChat(inviterId, invitedUserId);
+        // Create or get direct message room 
+        ChatRoom chatRoom = createDirectMessageChat(inviterId, invitedUserId, description);
 
         // Check if invite already exists
         Optional<ChatInvite> existingInvite = chatInviteRepository.findPendingInvite(chatRoom.getId(), invitedUserId);
@@ -82,9 +124,39 @@ public class ChatService {
             return existingInvite.get();
         }
 
-        // Create invite
-        ChatInvite invite = new ChatInvite(chatRoom, invitedUser, inviter, message);
-        invite.setExpiresAt(LocalDateTime.now().plusDays(7)); // Expires in 7 days
+    // Create invite 
+    ChatInvite invite = new ChatInvite(chatRoom, invitedUser, inviter, null);
+        invite.setExpiresAt(LocalDateTime.now().plusDays(7));
+        return chatInviteRepository.save(invite);
+    }
+
+    // Create an invite for an existing chat room 
+    public ChatInvite createChatInviteForRoom(Long inviterId, Long roomId, Long invitedUserId) {
+        User inviter = userRepository.findById(inviterId)
+                .orElseThrow(() -> new RuntimeException("Inviter not found: " + inviterId));
+
+        User invitedUser = userRepository.findById(invitedUserId)
+                .orElseThrow(() -> new RuntimeException("Invited user not found: " + invitedUserId));
+
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+
+        // Only allow invites into private rooms and only by the room owner
+        if (chatRoom.getRoomType() != RoomType.PRIVATE) {
+            throw new RuntimeException("Invites can only be sent to private rooms");
+        }
+        if (chatRoom.getCreatedBy() == null || !chatRoom.getCreatedBy().getId().equals(inviterId)) {
+            throw new RuntimeException("Only the room owner can invite others");
+        }
+
+        // Check if invite already exists
+        Optional<ChatInvite> existingInvite = chatInviteRepository.findPendingInvite(chatRoom.getId(), invitedUserId);
+        if (existingInvite.isPresent()) {
+            return existingInvite.get();
+        }
+
+        ChatInvite invite = new ChatInvite(chatRoom, invitedUser, inviter, null);
+        invite.setExpiresAt(LocalDateTime.now().plusDays(7));
 
         return chatInviteRepository.save(invite);
     }
@@ -199,7 +271,12 @@ public class ChatService {
         return "DM_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
-    // Clean up expired invites (can be called by a scheduled task)
+    // Generate a unique group room code
+    private String generateGroupRoomCode() {
+        return "GRP_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    // Clean up expired invites 
     public void cleanupExpiredInvites() {
         List<ChatInvite> expiredInvites = chatInviteRepository.findExpiredInvites(LocalDateTime.now());
         for (ChatInvite invite : expiredInvites) {
@@ -218,8 +295,8 @@ public class ChatService {
         User sender = userRepository.findById(senderId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + senderId));
         
-        // Verify user is a member of the room and room is active
-        if (!chatRoom.getIsActive() || !isUserMemberOfRoom(roomId, senderId)) {
+        // Verify room is active and either it's public or sender is a member
+        if (!chatRoom.getIsActive() || !(chatRoom.getRoomType() == RoomType.PUBLIC || isUserMemberOfRoom(roomId, senderId))) {
             throw new RuntimeException("User is not authorized to send messages in this room");
         }
         
@@ -238,15 +315,18 @@ public class ChatService {
 
     // Get messages for a chat room
     public List<ChatMessage> getRoomMessages(Long roomId, Long userId) {
-        // Verify user is a member of the room
-        if (!isUserMemberOfRoom(roomId, userId)) {
+        // Allow viewing messages if user is a member or the room is public
+        ChatRoom chatRoom = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+
+        if (!chatRoom.getIsActive() || !(chatRoom.getRoomType() == RoomType.PUBLIC || isUserMemberOfRoom(roomId, userId))) {
             throw new RuntimeException("User is not authorized to view messages in this room");
         }
-        
+
         return chatMessageRepository.findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtAsc(roomId);
     }
 
-    // Save a simple text message (convenience method)
+    // Save a simple text message
     public ChatMessage saveTextMessage(Long roomId, Long senderId, String content) {
         return saveMessage(roomId, senderId, content, MessageType.TEXT);
     }

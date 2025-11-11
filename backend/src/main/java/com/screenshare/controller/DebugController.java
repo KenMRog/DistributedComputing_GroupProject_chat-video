@@ -29,7 +29,7 @@ public class DebugController {
         String[] profiles = env.getActiveProfiles();
         info.put("activeProfiles", profiles.length == 0 ? new String[]{env.getProperty("spring.profiles.active")} : profiles);
 
-        // datasource url (mask password if present)
+        // datasource url 
         String url = env.getProperty("spring.datasource.url");
         if (url == null) url = env.getProperty("DB_URL");
         info.put("datasourceUrl", url != null ? url : "(not-set)");

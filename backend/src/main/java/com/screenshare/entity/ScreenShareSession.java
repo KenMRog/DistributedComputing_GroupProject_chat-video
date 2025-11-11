@@ -33,8 +33,8 @@ public class ScreenShareSession {
     @Column(length = 200)
     private String title;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
-    @Column(length = 1000)
+    @Size(max = 100, message = "Description must not exceed 100 characters")
+    @Column(length = 100)
     private String description;
 
     @Enumerated(EnumType.STRING)
@@ -55,13 +55,13 @@ public class ScreenShareSession {
 
     // Screen sharing quality settings
     @Column(length = 20)
-    private String resolution; // e.g., "1920x1080", "1280x720"
+    private String resolution; 
 
     @Column
-    private Integer frameRate; // frames per second
+    private Integer frameRate; 
 
     @Column
-    private Integer bitrate; // in kbps
+    private Integer bitrate;
 
     // WebRTC connection details
     @Column(length = 100)
@@ -93,7 +93,7 @@ public class ScreenShareSession {
     @Column
     private LocalDateTime endedAt;
 
-    // Duration in seconds (calculated when session ends)
+    // Duration in seconds 
     @Column
     private Long durationSeconds;
 

@@ -31,8 +31,9 @@ public class ChatRoom {
     @Column(nullable = false, length = 200)
     private String name;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
-    @Column(length = 1000)
+    @NotBlank(message = "Description is required")
+    @Size(max = 100, message = "Description must not exceed 100 characters")
+    @Column(length = 100, nullable = false)
     private String description;
 
     @Enumerated(EnumType.STRING)
@@ -167,6 +168,9 @@ public class ChatRoom {
     }
 
     public void setName(String name) {
+        if (this.id != null && this.roomType == RoomType.PRIVATE && !Objects.equals(this.name, name)) {
+            throw new IllegalStateException("Room name is immutable for private rooms");
+        }
         this.name = name;
     }
 
@@ -175,6 +179,9 @@ public class ChatRoom {
     }
 
     public void setDescription(String description) {
+        if (this.id != null && this.roomType == RoomType.PRIVATE && !Objects.equals(this.description, description)) {
+            throw new IllegalStateException("Room description is immutable for private rooms");
+        }
         this.description = description;
     }
 
@@ -183,6 +190,9 @@ public class ChatRoom {
     }
 
     public void setRoomType(RoomType roomType) {
+        if (this.id != null && this.roomType != roomType) {
+            throw new IllegalStateException("Room type is immutable after creation");
+        }
         this.roomType = roomType;
     }
 

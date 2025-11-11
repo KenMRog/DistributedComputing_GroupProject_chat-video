@@ -43,7 +43,7 @@ function AppContent() {
       <AppBar position="static" sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <Toolbar>
           <Typography variant="h5" component="h1" sx={{ flexGrow: 1, color: 'primary.main' }}>
-            ChatApp
+            Gatherly
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
