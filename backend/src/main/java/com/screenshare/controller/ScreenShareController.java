@@ -3,6 +3,7 @@ package com.screenshare.controller;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Controller;
+import com.screenshare.model.SignalMessage;
 
 @Controller
 public class ScreenShareController {
@@ -25,6 +26,13 @@ public class ScreenShareController {
     @SendTo("/topic/screenshare")
     public ScreenShareMessage handleScreenData(ScreenShareMessage message) {
         message.setAction("data");
+        return message;
+    }
+
+    @MessageMapping("/screenshare.signal")
+    @SendTo("/topic/screenshare")
+    public SignalMessage handleSignal(SignalMessage message) {
+        // Simply broadcast the message to all subscribers
         return message;
     }
 

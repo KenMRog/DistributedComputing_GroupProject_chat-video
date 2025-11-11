@@ -9,7 +9,6 @@ import {
   ListItemText,
   Typography,
   Avatar,
-  Chip,
   Grid,
   IconButton,
   Dialog,
@@ -18,10 +17,6 @@ import {
   DialogActions,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Checkbox,
 } from '@mui/material';
 import { 
@@ -33,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import SimplePeer from 'simple-peer';
 
 const ChatComponent = ({ chatRoom }) => {
   const [messages, setMessages] = useState([]);
@@ -42,358 +38,255 @@ const ChatComponent = ({ chatRoom }) => {
   const [screenshareDialog, setScreenshareDialog] = useState(false);
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
+  const [peer, setPeer] = useState(null);
   const messagesEndRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const { connected, sendMessage, subscribe } = useSocket();
   const { user } = useAuth();
-  
+
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteSearchTerm, setInviteSearchTerm] = useState('');
   const [inviteResults, setInviteResults] = useState([]);
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState([]);
-  
-  // Get username from authenticated user
+
   const username = user?.username || user?.name || 'Anonymous';
+  const chatTopic = `/topic/chat/${chatRoom.id}`;
+  const signalTopic = `/topic/signal/${chatRoom.id}`;
+  const screenshareTopic = `/topic/screenshare`; // existing backend endpoint
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Scroll to bottom of chat
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(scrollToBottom, [messages]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Load historical messages when chat room changes
+  // Load historical messages
   useEffect(() => {
     const loadMessages = async () => {
-      if (chatRoom && user) {
-        try {
-          const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/messages?userId=${user.id}`);
-          if (response.ok) {
-            const historicalMessages = await response.json();
-            // Convert to WebSocket message format for consistency
-            const formattedMessages = historicalMessages.map(msg => ({
-              content: msg.content,
-              sender: msg.senderDisplayName || msg.senderUsername,
-              senderId: msg.senderId,
-              type: msg.messageType || 'CHAT',
-              timestamp: msg.createdAt
-            }));
-            setMessages(formattedMessages);
-          }
-        } catch (error) {
-          console.error('Failed to load messages:', error);
-          setMessages([]); // Start with empty if loading fails
+      try {
+        const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/messages?userId=${user.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMessages(
+            data.map((m) => ({
+              content: m.content,
+              sender: m.senderDisplayName || m.senderUsername,
+              senderId: m.senderId,
+              timestamp: m.createdAt,
+            }))
+          );
         }
+      } catch (err) {
+        console.error('Failed to load messages', err);
       }
     };
-
     loadMessages();
-  }, [chatRoom, user]);
+  }, [chatRoom.id, user.id]);
 
+  // Subscribe to chat and screen share notifications
   useEffect(() => {
-    if (connected && subscribe && username && chatRoom) {
-      const chatTopic = `/topic/chat/${chatRoom.id}`;
-      const screenshareTopic = `/topic/screenshare/${chatRoom.id}`;
-      
-      const chatSubscription = subscribe(chatTopic, (message) => {
-        const receivedMessage = JSON.parse(message.body);
-        setMessages(prev => [...prev, receivedMessage]);
-      });
+    if (!connected) return;
 
-      const screenshareSubscription = subscribe(screenshareTopic, (message) => {
-        const data = JSON.parse(message.body);
+    const subs = [];
+    subs.push(
+      subscribe(chatTopic, (msg) => {
+        const received = JSON.parse(msg.body);
+        setMessages((prev) => [...prev, received]);
+      })
+    );
+
+    // Optional notification if you still want your backend's start/stop events
+    subs.push(
+      subscribe(screenshareTopic, (msg) => {
+        const data = JSON.parse(msg.body);
         if (data.userId !== user.id) {
-          if (data.action === 'start') {
-            setRemoteStream(data);
-            setScreenshareDialog(true);
-          } else if (data.action === 'stop') {
-            setRemoteStream(null);
-          }
+          console.log('Received screen share event:', data);
         }
-      });
-      
-      setIsConnected(true);
-      
-      return () => {
-        if (chatSubscription) {
-          chatSubscription.unsubscribe();
-        }
-        if (screenshareSubscription) {
-          screenshareSubscription.unsubscribe();
-        }
-      };
-    }
-  }, [connected, subscribe, username, sendMessage, chatRoom, user.id]);
+      })
+    );
 
-  const fetchUsersForInvite = async (q) => {
-    try {
-      const base = `http://localhost:8080/api/users`;
-  const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}` : `${base}?excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}`;
-      const response = await fetch(url);
-      if (response.ok) {
-        const data = await response.json();
-        // filter out current user if present
-        setInviteResults(data.filter(u => u.id !== user.id));
-      }
-    } catch (err) {
-      console.error('Error fetching users for invite:', err);
-    }
-  };
+    setIsConnected(true);
+    return () => subs.forEach((s) => s.unsubscribe());
+  }, [connected, chatRoom.id]);
 
-  const openInviteDialog = () => {
-    setInviteSearchTerm('');
-    setInviteResults([]);
-    setSelectedInviteUserIds([]);
-    setInviteDialogOpen(true);
-  };
-
-  // Debounced search for invite dialog
-  useEffect(() => {
-    let t;
-    if (inviteDialogOpen) {
-      t = setTimeout(() => {
-        fetchUsersForInvite(inviteSearchTerm);
-      }, 300);
-    }
-    return () => clearTimeout(t);
-  }, [inviteSearchTerm, inviteDialogOpen]);
-
-  const handleSendInvites = async () => {
-    if (!chatRoom || !selectedInviteUserIds.length) return;
-    try {
-      const payload = { invitedUserIds: selectedInviteUserIds };
-      const resp = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/invites?inviterId=${user.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (resp.ok) {
-        setInviteDialogOpen(false);
-        setSelectedInviteUserIds([]);
-        // Optionally refresh pending invites or chatroom
-      } else {
-        console.error('Failed to send invites', await resp.text());
-      }
-    } catch (err) {
-      console.error('Error sending invites:', err);
-    }
-  };
-
+  // Send chat message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (newMessage.trim() && username && chatRoom) {
-      const message = {
-        content: newMessage,
-        sender: username,
-        senderId: user.id,
-        type: 'CHAT'
-      };
-      
-      sendMessage(`/app/chat/${chatRoom.id}/sendMessage`, message);
-      setNewMessage('');
-    }
+    if (!newMessage.trim()) return;
+    const msg = {
+      content: newMessage,
+      sender: username,
+      senderId: user.id,
+      type: 'CHAT',
+    };
+    sendMessage(`/app/chat/${chatRoom.id}/sendMessage`, msg);
+    setNewMessage('');
   };
 
+  // --- Screen Share ---
   const startScreenShare = async () => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-      });
-
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       setLocalStream(stream);
       setIsScreensharing(true);
       setScreenshareDialog(true);
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
+      localVideoRef.current.srcObject = stream;
 
-      // Notify other user in the chat room about screen share
-      if (connected && sendMessage && chatRoom) {
-        sendMessage(`/app/screenshare/${chatRoom.id}/start`, {
-          userId: user.id,
-          username: username,
-          roomId: chatRoom.id
+      // Notify via your existing endpoint
+      sendMessage(`/app/screenshare.start`, { userId: user.id, username, roomId: chatRoom.id });
+
+      // WebRTC connection
+      const newPeer = new SimplePeer({ initiator: true, trickle: false, stream });
+
+      newPeer.on('signal', (signalData) => {
+        sendMessage(`/app/signal/${chatRoom.id}`, {
+          type: 'offer',
+          fromUserId: user.id,
+          signal: signalData,
         });
-      }
+      });
 
-      // Handle when user stops sharing by clicking the browser's stop button
-      stream.getVideoTracks()[0].onended = () => {
-        stopScreenShare();
-      };
-    } catch (error) {
-      console.error('Error starting screen share:', error);
+      newPeer.on('stream', (remoteStream) => {
+        remoteVideoRef.current.srcObject = remoteStream;
+        setRemoteStream(remoteStream);
+      });
+
+      stream.getVideoTracks()[0].onended = stopScreenShare;
+
+      setPeer(newPeer);
+    } catch (err) {
+      console.error('Error starting screen share:', err);
     }
   };
 
   const stopScreenShare = () => {
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-      setLocalStream(null);
-    }
-    
+    if (localStream) localStream.getTracks().forEach((t) => t.stop());
+    if (peer) peer.destroy();
+    setPeer(null);
+    setLocalStream(null);
+    setRemoteStream(null);
     setIsScreensharing(false);
     setScreenshareDialog(false);
 
-    // Notify other user about stopping screen share
-    if (connected && sendMessage && chatRoom) {
-      sendMessage(`/app/screenshare/${chatRoom.id}/stop`, {
-        userId: user.id,
-        username: username,
-        roomId: chatRoom.id
-      });
-    }
-
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
+    sendMessage(`/app/screenshare.start`, { userId: user.id, action: 'stop' });
   };
 
-  if (!isConnected) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-        <Typography variant="h6">Connecting to chat...</Typography>
-      </Box>
-    );
-  }
+  // Handle incoming WebRTC signaling
+  useEffect(() => {
+    if (!connected) return;
+    const sub = subscribe(signalTopic, (msg) => {
+      const body = JSON.parse(msg.body);
+      if (body.fromUserId === user.id) return;
 
-  const getOtherUser = () => {
-    if (chatRoom && chatRoom.members && chatRoom.members.length === 2) {
-      return chatRoom.members.find(member => member.id !== user.id);
-    }
-    return null;
-  };
+      if (body.type === 'offer') {
+        const responder = new SimplePeer({ initiator: false, trickle: false });
+
+        responder.on('signal', (signalData) => {
+          sendMessage(`/app/signal/${chatRoom.id}`, {
+            type: 'answer',
+            fromUserId: user.id,
+            signal: signalData,
+          });
+        });
+
+        responder.on('stream', (remoteStream) => {
+          remoteVideoRef.current.srcObject = remoteStream;
+          setRemoteStream(remoteStream);
+        });
+
+        responder.signal(body.signal);
+        setPeer(responder);
+      } else if (body.type === 'answer' && peer) {
+        peer.signal(body.signal);
+      }
+    });
+
+    return () => sub.unsubscribe();
+  }, [connected, chatRoom.id, peer]);
+
+  // Get other user (for private 1:1)
+  const getOtherUser = () =>
+    chatRoom.members?.length === 2 ? chatRoom.members.find((m) => m.id !== user.id) : null;
 
   const otherUser = getOtherUser();
 
+  // --- UI ---
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1a1a1a' }}>
-      {/* Chat Header */}
+      {/* Header */}
       <Paper sx={{ p: 2, mb: 2, borderRadius: 0, bgcolor: '#2d2d2d', color: 'white' }}>
-        <Grid container spacing={2} alignItems="center">
+        <Grid container alignItems="center" spacing={2}>
           <Grid item>
             <Avatar sx={{ bgcolor: 'primary.main' }}>
               {otherUser ? (otherUser.displayName || otherUser.username).charAt(0).toUpperCase() : <PersonIcon />}
             </Avatar>
           </Grid>
           <Grid item>
-            <CircleIcon 
-              sx={{ 
-                color: isConnected ? 'success.main' : 'error.main', 
+            <CircleIcon
+              sx={{
+                color: isConnected ? 'success.main' : 'error.main',
                 fontSize: 12,
-                mr: 1 
-              }} 
+                mr: 1,
+              }}
             />
           </Grid>
           <Grid item xs>
-            <Typography variant="h6" sx={{ color: 'white' }}>
-              {otherUser ? (otherUser.displayName || otherUser.username) : chatRoom?.name || 'Chat'}
+            <Typography variant="h6">{otherUser?.displayName || chatRoom?.name || 'Chat'}</Typography>
+            <Typography variant="body2" sx={{ color: '#ccc' }}>
+              {otherUser?.username || chatRoom?.description}
             </Typography>
-            {otherUser ? (
-              <Typography variant="body2" sx={{ color: '#cccccc' }}>
-                {otherUser ? (otherUser.username) : ''}
-              </Typography>
-            ) : (
-              // show the chat description at the top
-              <Typography variant="body2" sx={{ color: '#cccccc' }}>
-                {chatRoom?.description}
-              </Typography>
-            )}
           </Grid>
           <Grid item>
-            {chatRoom?.roomType === 'PRIVATE' && user && chatRoom?.createdById === user.id && (
-              <Button variant="outlined" color="inherit" onClick={openInviteDialog} sx={{ mr: 1 }}>
-                Invite
-              </Button>
+            {chatRoom?.members?.length === 2 && (
+              <IconButton
+                color={isScreensharing ? 'error' : 'primary'}
+                onClick={isScreensharing ? stopScreenShare : startScreenShare}
+                title={isScreensharing ? 'Stop Screen Share' : 'Start Screen Share'}
+                sx={{ color: 'white' }}
+              >
+                {isScreensharing ? <StopIcon /> : <ScreenShareIcon />}
+              </IconButton>
             )}
-            <IconButton 
-              color={isScreensharing ? "error" : "primary"}
-              onClick={isScreensharing ? stopScreenShare : startScreenShare}
-              title={isScreensharing ? "Stop Screen Share" : "Start Screen Share"}
-              sx={{ color: 'white' }}
-            >
-              {isScreensharing ? <StopIcon /> : <ScreenShareIcon />}
-            </IconButton>
           </Grid>
         </Grid>
       </Paper>
 
-      <Paper sx={{ flexGrow: 1, mb: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: '#1a1a1a' }}>
-        <List sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
-          {messages.map((message, index) => {
-            const isOwnMessage = message.senderId === user.id;
+      {/* Messages */}
+      <Paper sx={{ flexGrow: 1, mb: 2, overflowY: 'auto', p: 2, bgcolor: '#1a1a1a' }}>
+        <List>
+          {messages.map((msg, i) => {
+            const isOwn = msg.senderId === user.id;
             return (
-              <ListItem 
-                key={index} 
-                alignItems="flex-start" 
-                sx={{ 
-                  mb: 1, 
-                  display: 'flex',
-                  flexDirection: isOwnMessage ? 'row-reverse' : 'row',
-                  justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
-                  width: '100%'
-                }}
-              >
-                {!isOwnMessage && (
+              <ListItem key={i} sx={{ flexDirection: isOwn ? 'row-reverse' : 'row' }}>
+                {!isOwn && (
                   <Avatar sx={{ mr: 2, bgcolor: 'secondary.main' }}>
-                    {message.sender?.charAt(0).toUpperCase()}
+                    {msg.sender?.charAt(0).toUpperCase()}
                   </Avatar>
                 )}
-                <Box
-                  sx={{
-                    maxWidth: '70%',
-                    minWidth: '100px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: isOwnMessage ? 'flex-end' : 'flex-start',
-                    ml: isOwnMessage ? 'auto' : 0,
-                    mr: isOwnMessage ? 2 : 0
-                  }}
-                >
-                  {!isOwnMessage && (
-                    <Typography 
-                      variant="caption" 
-                      sx={{ mb: 0.5, ml: 1, color: '#cccccc' }}
-                    >
-                      {message.sender}
+                <Box sx={{ maxWidth: '70%', textAlign: isOwn ? 'right' : 'left' }}>
+                  {!isOwn && (
+                    <Typography variant="caption" sx={{ color: '#aaa' }}>
+                      {msg.sender}
                     </Typography>
                   )}
                   <Paper
-                    elevation={1}
                     sx={{
-                      p: 1.5,
-                      bgcolor: isOwnMessage ? '#007AFF' : '#444444',
+                      p: 1.2,
+                      mt: 0.5,
+                      bgcolor: isOwn ? '#007AFF' : '#444',
                       color: 'white',
-                      borderRadius: isOwnMessage 
-                        ? '18px 18px 4px 18px' 
-                        : '18px 18px 18px 4px',
-                      wordBreak: 'break-word'
+                      borderRadius: isOwn ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                     }}
                   >
-                    <Typography variant="body2" sx={{ color: 'white' }}>
-                      {message.content}
-                    </Typography>
+                    {msg.content}
                   </Paper>
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      mt: 0.5, 
-                      alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
-                      mr: isOwnMessage ? 1 : 0,
-                      ml: isOwnMessage ? 0 : 1,
-                      color: '#cccccc'
-                    }}
-                  >
-                    {message.timestamp && new Date(message.timestamp).toLocaleTimeString()}
+                  <Typography variant="caption" sx={{ color: '#aaa' }}>
+                    {msg.timestamp && new Date(msg.timestamp).toLocaleTimeString()}
                   </Typography>
                 </Box>
-                {isOwnMessage && (
+                {isOwn && (
                   <Avatar sx={{ ml: 2, bgcolor: 'primary.main' }}>
-                    {username?.charAt(0).toUpperCase()}
+                    {username.charAt(0).toUpperCase()}
                   </Avatar>
                 )}
               </ListItem>
@@ -403,12 +296,11 @@ const ChatComponent = ({ chatRoom }) => {
         </List>
       </Paper>
 
+      {/* Message input */}
       <Paper component="form" onSubmit={handleSendMessage} sx={{ p: 2, bgcolor: '#2d2d2d' }}>
-        <Box display="flex" gap={1} alignItems="flex-end">
+        <Box display="flex" gap={1}>
           <TextField
-            color="primary"
             fullWidth
-            variant="outlined"
             placeholder="iMessage"
             multiline
             maxRows={4}
@@ -423,47 +315,21 @@ const ChatComponent = ({ chatRoom }) => {
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: '20px',
-                bgcolor: '#444444',
+                bgcolor: '#444',
                 color: 'white',
-                '& fieldset': {
-                  border: '1px solid #666666'
-                },
-                '&:hover fieldset': {
-                  border: '1px solid #888888'
-                },
-                '&.Mui-focused fieldset': {
-                  border: '2px solid #007AFF'
-                }
               },
-              '& .MuiInputBase-input': {
-                color: 'white',
-                '&::placeholder': {
-                  color: '#cccccc',
-                  opacity: 1
-                }
-              }
             }}
           />
           <Button
             type="submit"
             variant="contained"
-            sx={{
-              minWidth: '50px',
-              width: '50px',
-              height: '50px',
-              borderRadius: '50%',
-              p: 0,
-              bgcolor: newMessage.trim() ? '#007AFF' : '#666666',
-              color: 'white',
-              '&:hover': {
-                bgcolor: newMessage.trim() ? '#0056CC' : '#666666'
-              },
-              '&:disabled': {
-                bgcolor: '#666666',
-                color: '#999999'
-              }
-            }}
             disabled={!newMessage.trim()}
+            sx={{
+              borderRadius: '50%',
+              width: 50,
+              height: 50,
+              bgcolor: newMessage.trim() ? '#007AFF' : '#666',
+            }}
           >
             <SendIcon />
           </Button>
@@ -471,102 +337,31 @@ const ChatComponent = ({ chatRoom }) => {
       </Paper>
 
       {/* Screen Share Dialog */}
-      <Dialog 
-        open={screenshareDialog} 
-        onClose={() => setScreenshareDialog(false)}
-        maxWidth="lg"
-        fullWidth
-      >
+      <Dialog open={screenshareDialog} onClose={stopScreenShare} maxWidth="lg" fullWidth>
         <DialogTitle>
-          <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Screen Share</Typography>
-            <IconButton onClick={() => setScreenshareDialog(false)}>
-              ✕
-            </IconButton>
-          </Box>
+          <Typography variant="h6">Screen Share</Typography>
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2}>
-            {/* Local Screen Share */}
             {isScreensharing && (
               <Grid item xs={12} md={remoteStream ? 6 : 12}>
                 <Card>
                   <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Your Screen
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: '100%',
-                        height: 300,
-                        bgcolor: 'black',
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <video
-                        ref={localVideoRef}
-                        autoPlay
-                        muted
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                        }}
-                      />
+                    <Typography>Your Screen</Typography>
+                    <Box sx={{ bgcolor: 'black', height: 300, borderRadius: 1 }}>
+                      <video ref={localVideoRef} autoPlay muted style={{ width: '100%', height: '100%' }} />
                     </Box>
                   </CardContent>
                 </Card>
               </Grid>
             )}
-
-            {/* Remote Screen Share */}
             {remoteStream && (
               <Grid item xs={12} md={isScreensharing ? 6 : 12}>
                 <Card>
                   <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      {remoteStream.username}'s Screen
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: '100%',
-                        height: 300,
-                        bgcolor: 'black',
-                        borderRadius: 1,
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Typography variant="body1" color="white">
-                        {remoteStream.username} is sharing their screen
-                      </Typography>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-
-            {/* No active screen share */}
-            {!isScreensharing && !remoteStream && (
-              <Grid item xs={12}>
-                <Card>
-                  <CardContent>
-                    <Box
-                      sx={{
-                        textAlign: 'center',
-                        p: 4,
-                      }}
-                    >
-                      <ScreenShareIcon sx={{ fontSize: 60, color: 'grey.400', mb: 2 }} />
-                      <Typography variant="h6" color="text.secondary" gutterBottom>
-                        No Active Screen Share
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Click the screen share button to start sharing your screen
-                      </Typography>
+                    <Typography>{otherUser?.displayName || 'User'}'s Screen</Typography>
+                    <Box sx={{ bgcolor: 'black', height: 300, borderRadius: 1 }}>
+                      <video ref={remoteVideoRef} autoPlay style={{ width: '100%', height: '100%' }} />
                     </Box>
                   </CardContent>
                 </Card>
@@ -574,63 +369,9 @@ const ChatComponent = ({ chatRoom }) => {
             )}
           </Grid>
         </DialogContent>
-      </Dialog>
-
-      {/* Invite Users Dialog */}
-      <Dialog
-        open={inviteDialogOpen}
-        onClose={() => setInviteDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Invite Users</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 1 }}>Search for users to invite.</Typography>
-          <TextField
-            fullWidth
-            placeholder="Search users by username or email"
-            value={inviteSearchTerm}
-            onChange={(e) => setInviteSearchTerm(e.target.value)}
-            sx={{ mb: 1 }}
-          />
-          <List>
-            {inviteResults.map((u) => (
-              <ListItem
-                key={u.id}
-                button
-                onClick={() => {
-                  const exists = selectedInviteUserIds.includes(u.id);
-                  if (exists) {
-                    setSelectedInviteUserIds(prev => prev.filter(id => id !== u.id));
-                  } else {
-                    setSelectedInviteUserIds(prev => [...prev, u.id]);
-                  }
-                }}
-              >
-                <Checkbox
-                  edge="start"
-                  checked={selectedInviteUserIds.includes(u.id)}
-                  tabIndex={-1}
-                  disableRipple
-                />
-                <ListItemText primary={u.displayName || u.username} secondary={u.email || ''} />
-              </ListItem>
-            ))}
-            {inviteResults.length === 0 && (
-              <ListItem>
-                <ListItemText primary="No matching users" />
-              </ListItem>
-            )}
-          </List>
-        </DialogContent>
         <DialogActions>
-          <Button onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleSendInvites}
-            disabled={selectedInviteUserIds.length === 0}
-          >
-            Send Invites
+          <Button onClick={stopScreenShare} color="error" variant="contained">
+            Stop Sharing
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import SockJS from 'sockjs-client';
-import { Stomp } from '@stomp/stompjs';
+import { Client } from '@stomp/stompjs';
 
 const SocketContext = createContext();
 
@@ -17,51 +17,52 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socket = new SockJS('http://localhost:8080/api/ws');
-    const client = Stomp.over(socket);
-    
-    // Filter or simplify verbose library debug logs (some implementations log 'connected to server undefined')
-    client.debug = (str) => {
-      // suppress noisy 'connected to server undefined' messages or simplify them
-      if (typeof str === 'string' && str.includes('connected to server')) {
-        // try to print a clearer message with the underlying transport URL when available
-        const serverUrl = socket && socket._transport && socket._transport.url ? socket._transport.url : 'unknown';
-        console.log(`STOMP: connected to server ${serverUrl}`);
-      } else {
-        console.log('STOMP: ' + str);
-      }
-    };
+    const socketUrl = 'http://localhost:8080/api/ws';
 
-    client.connect({}, () => {
-      setStompClient(client);
-      setConnected(true);
-      // show resolved transport URL (SockJS transport exposes _transport.url)
-      const serverUrl = socket && socket._transport && socket._transport.url ? socket._transport.url : 'unknown';
-      console.log('Connected to WebSocket, server:', serverUrl);
-    }, (error) => {
-      console.error('WebSocket connection error:', error);
-      setConnected(false);
+    // Create a new STOMP client
+    const client = new Client({
+      webSocketFactory: () => new SockJS(socketUrl),
+      reconnectDelay: 5000, // Try reconnecting every 5 seconds if disconnected
+      onConnect: (frame) => {
+        console.log('✅ Connected to WebSocket:', frame);
+        setConnected(true);
+        setStompClient(client);
+      },
+      onDisconnect: () => {
+        console.warn('⚠️ Disconnected from WebSocket');
+        setConnected(false);
+        setStompClient(null);
+      },
+      onStompError: (frame) => {
+        console.error('❌ STOMP Error:', frame.headers['message'], frame.body);
+      },
+      debug: (msg) => {
+        // Optional: comment this line out to reduce console spam
+        if (!msg.includes('PING')) console.log('STOMP Debug:', msg);
+      },
     });
 
+    client.activate();
+
     return () => {
-      if (client && client.connected) {
-        client.disconnect();
-      }
+      console.log('🛑 Disconnecting WebSocket...');
+      client.deactivate();
     };
   }, []);
 
   const sendMessage = (destination, body) => {
-    if (stompClient && stompClient.connected) {
-      stompClient.send(destination, {}, JSON.stringify(body));
+    if (stompClient && connected) {
+      stompClient.publish({ destination, body: JSON.stringify(body) });
     } else {
-      console.error('WebSocket not connected');
+      console.error('❌ Cannot send message — not connected');
     }
   };
 
   const subscribe = (destination, callback) => {
-    if (stompClient && stompClient.connected) {
+    if (stompClient && connected) {
       return stompClient.subscribe(destination, callback);
     }
+    console.warn('⚠️ Tried to subscribe before connection established');
     return null;
   };
 
