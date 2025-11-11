@@ -15,8 +15,14 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Card,
   CardContent,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Checkbox,
 } from '@mui/material';
 import { 
   Send as SendIcon, 
@@ -41,6 +47,11 @@ const ChatComponent = ({ chatRoom }) => {
   const remoteVideoRef = useRef(null);
   const { connected, sendMessage, subscribe } = useSocket();
   const { user } = useAuth();
+  
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteSearchTerm, setInviteSearchTerm] = useState('');
+  const [inviteResults, setInviteResults] = useState([]);
+  const [selectedInviteUserIds, setSelectedInviteUserIds] = useState([]);
   
   // Get username from authenticated user
   const username = user?.username || user?.name || 'Anonymous';
@@ -115,6 +126,61 @@ const ChatComponent = ({ chatRoom }) => {
       };
     }
   }, [connected, subscribe, username, sendMessage, chatRoom, user.id]);
+
+  const fetchUsersForInvite = async (q) => {
+    try {
+      const base = `http://localhost:8080/api/users`;
+  const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}` : `${base}?excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        // filter out current user if present
+        setInviteResults(data.filter(u => u.id !== user.id));
+      }
+    } catch (err) {
+      console.error('Error fetching users for invite:', err);
+    }
+  };
+
+  const openInviteDialog = () => {
+    setInviteSearchTerm('');
+    setInviteResults([]);
+    setSelectedInviteUserIds([]);
+    setInviteDialogOpen(true);
+  };
+
+  // Debounced search for invite dialog
+  useEffect(() => {
+    let t;
+    if (inviteDialogOpen) {
+      t = setTimeout(() => {
+        fetchUsersForInvite(inviteSearchTerm);
+      }, 300);
+    }
+    return () => clearTimeout(t);
+  }, [inviteSearchTerm, inviteDialogOpen]);
+
+  const handleSendInvites = async () => {
+    if (!chatRoom || !selectedInviteUserIds.length) return;
+    try {
+      const payload = { invitedUserIds: selectedInviteUserIds };
+      const resp = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/invites?inviterId=${user.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        setInviteDialogOpen(false);
+        setSelectedInviteUserIds([]);
+        // Optionally refresh pending invites or chatroom
+      } else {
+        console.error('Failed to send invites', await resp.text());
+      }
+    } catch (err) {
+      console.error('Error sending invites:', err);
+    }
+  };
 
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -227,11 +293,23 @@ const ChatComponent = ({ chatRoom }) => {
             <Typography variant="h6" sx={{ color: 'white' }}>
               {otherUser ? (otherUser.displayName || otherUser.username) : chatRoom?.name || 'Chat'}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#cccccc' }}>
-              {otherUser ? (otherUser.username) : ''}
-            </Typography>
+            {otherUser ? (
+              <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                {otherUser ? (otherUser.username) : ''}
+              </Typography>
+            ) : (
+              // show the chat description at the top
+              <Typography variant="body2" sx={{ color: '#cccccc' }}>
+                {chatRoom?.description}
+              </Typography>
+            )}
           </Grid>
           <Grid item>
+            {chatRoom?.roomType === 'PRIVATE' && user && chatRoom?.createdById === user.id && (
+              <Button variant="outlined" color="inherit" onClick={openInviteDialog} sx={{ mr: 1 }}>
+                Invite
+              </Button>
+            )}
             <IconButton 
               color={isScreensharing ? "error" : "primary"}
               onClick={isScreensharing ? stopScreenShare : startScreenShare}
@@ -496,6 +574,65 @@ const ChatComponent = ({ chatRoom }) => {
             )}
           </Grid>
         </DialogContent>
+      </Dialog>
+
+      {/* Invite Users Dialog */}
+      <Dialog
+        open={inviteDialogOpen}
+        onClose={() => setInviteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Invite Users</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1 }}>Search for users to invite.</Typography>
+          <TextField
+            fullWidth
+            placeholder="Search users by username or email"
+            value={inviteSearchTerm}
+            onChange={(e) => setInviteSearchTerm(e.target.value)}
+            sx={{ mb: 1 }}
+          />
+          <List>
+            {inviteResults.map((u) => (
+              <ListItem
+                key={u.id}
+                button
+                onClick={() => {
+                  const exists = selectedInviteUserIds.includes(u.id);
+                  if (exists) {
+                    setSelectedInviteUserIds(prev => prev.filter(id => id !== u.id));
+                  } else {
+                    setSelectedInviteUserIds(prev => [...prev, u.id]);
+                  }
+                }}
+              >
+                <Checkbox
+                  edge="start"
+                  checked={selectedInviteUserIds.includes(u.id)}
+                  tabIndex={-1}
+                  disableRipple
+                />
+                <ListItemText primary={u.displayName || u.username} secondary={u.email || ''} />
+              </ListItem>
+            ))}
+            {inviteResults.length === 0 && (
+              <ListItem>
+                <ListItemText primary="No matching users" />
+              </ListItem>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleSendInvites}
+            disabled={selectedInviteUserIds.length === 0}
+          >
+            Send Invites
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

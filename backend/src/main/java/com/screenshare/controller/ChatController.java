@@ -43,11 +43,10 @@ public class ChatController {
             // Only proceed if room exists and is active and sender is a member
             if (chatService.getChatRoom(roomId).isPresent()) {
                 ChatRoom room = chatService.getChatRoom(roomId).get();
-                if (room.getIsActive() && chatService.isUserMemberOfRoom(roomId, message.getSenderId())) {
+                if (room.getIsActive() && (room.getRoomType() == com.screenshare.entity.RoomType.PUBLIC || chatService.isUserMemberOfRoom(roomId, message.getSenderId()))) {
                     
-                    // Save the message to database (this persists it even if users are offline)
-                    // Convert WebSocket MessageType to Entity MessageType
-                    MessageType msgType = MessageType.TEXT; // Default to TEXT
+                    
+                    MessageType msgType = MessageType.TEXT; 
                     if (message.getType() != null) {
                         try {
                             switch (message.getType()) {
@@ -58,17 +57,16 @@ public class ChatController {
                             }
                         } catch (Exception e) {
                             System.err.println("Error converting message type: " + e.getMessage());
-                            msgType = MessageType.TEXT; // fallback to TEXT
+                            msgType = MessageType.TEXT; 
                         }
                     }
                     chatService.saveMessage(roomId, message.getSenderId(), message.getContent(), msgType);
                     
-                    // Broadcast to all subscribers (online users will see it immediately)
+                    // Broadcast to all subscribers 
                     messagingTemplate.convertAndSend("/topic/chat/" + roomId, message);
                 }
             }
         } catch (Exception e) {
-            // Log error but don't crash the WebSocket connection
             System.err.println("Error processing message: " + e.getMessage());
         }
     }
@@ -79,7 +77,7 @@ public class ChatController {
         // Broadcast join event only if user is a member of the room and room is active
         if (chatService.getChatRoom(roomId).isPresent()) {
             ChatRoom room = chatService.getChatRoom(roomId).get();
-            if (room.getIsActive() && chatService.isUserMemberOfRoom(roomId, message.getSenderId())) {
+            if (room.getIsActive() && (room.getRoomType() == com.screenshare.entity.RoomType.PUBLIC || chatService.isUserMemberOfRoom(roomId, message.getSenderId()))) {
                 // Set content for join message if not already set
                 if (message.getContent() == null || message.getContent().isEmpty()) {
                     message.setContent(message.getSender() + " joined!");
@@ -94,7 +92,7 @@ public class ChatController {
         // Verify user is member of room and room is active
         if (chatService.getChatRoom(roomId).isPresent()) {
             ChatRoom room = chatService.getChatRoom(roomId).get();
-            if (room.getIsActive() && chatService.isUserMemberOfRoom(roomId, message.getUserId())) {
+            if (room.getIsActive() && (room.getRoomType() == com.screenshare.entity.RoomType.PUBLIC || chatService.isUserMemberOfRoom(roomId, message.getUserId()))) {
                 message.setAction("start");
                 message.setTimestamp(LocalDateTime.now());
                 messagingTemplate.convertAndSend("/topic/screenshare/" + roomId, message);
@@ -131,17 +129,55 @@ public class ChatController {
         }
     }
 
+    // Create a new chat room 
+    @PostMapping("/rooms")
+    public ResponseEntity<ChatRoomDto> createRoom(@Valid @RequestBody CreateChatRoomRequest request, @RequestParam Long creatorId) {
+        try {
+            ChatRoom room = chatService.createGroupChat(creatorId, request.getName(), request.getDescription(), Boolean.TRUE.equals(request.getIsPrivate()));
+            return ResponseEntity.ok(new ChatRoomDto(room));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Join a public room
+    @PostMapping("/rooms/{roomId}/join")
+    public ResponseEntity<ChatRoomDto> joinRoom(@PathVariable Long roomId, @RequestParam Long userId) {
+        try {
+            ChatRoom room = chatService.joinPublicRoom(roomId, userId);
+            return ResponseEntity.ok(new ChatRoomDto(room));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     // Create a chat invite
     @PostMapping("/invite")
     public ResponseEntity<ChatInviteDto> createInvite(@Valid @RequestBody CreateChatInviteRequest request, 
                                                      @RequestParam Long inviterId) {
         try {
             ChatInviteDto invite = new ChatInviteDto(chatService.createChatInvite(
-                    inviterId, 
-                    request.getInvitedUserId(), 
-                    request.getMessage()
+                    inviterId,
+                    request.getInvitedUserId(),
+                    request.getDescription()
             ));
             return ResponseEntity.ok(invite);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Invite multiple users to an existing private room
+    @PostMapping("/rooms/{roomId}/invites")
+    public ResponseEntity<List<ChatInviteDto>> inviteUsersToRoom(@PathVariable Long roomId,
+                                                                 @RequestBody com.screenshare.dto.InviteMultipleRequest request,
+                                                                 @RequestParam Long inviterId) {
+        try {
+            List<ChatInviteDto> created = request.getInvitedUserIds().stream()
+                    .map(uid -> new ChatInviteDto(chatService.createChatInviteForRoom(inviterId, roomId, uid)))
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(created);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -212,13 +248,24 @@ public class ChatController {
     @GetMapping("/rooms/{roomId}")
     public ResponseEntity<ChatRoomDto> getChatRoom(@PathVariable Long roomId, @RequestParam Long userId) {
         try {
-            if (!chatService.isUserMemberOfRoom(roomId, userId)) {
+            // Fetch room
+            java.util.Optional<ChatRoom> opt = chatService.getChatRoom(roomId);
+            if (!opt.isPresent()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            ChatRoom room = opt.get();
+
+            // Allow access if room is public or user is a member
+            if (!room.getIsActive()) {
                 return ResponseEntity.status(403).build();
             }
-            
-            return chatService.getChatRoom(roomId)
-                    .map(room -> ResponseEntity.ok(new ChatRoomDto(room)))
-                    .orElse(ResponseEntity.notFound().build());
+
+            if (room.getRoomType() == com.screenshare.entity.RoomType.PUBLIC || chatService.isUserMemberOfRoom(roomId, userId)) {
+                return ResponseEntity.ok(new ChatRoomDto(room));
+            }
+
+            return ResponseEntity.status(403).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }

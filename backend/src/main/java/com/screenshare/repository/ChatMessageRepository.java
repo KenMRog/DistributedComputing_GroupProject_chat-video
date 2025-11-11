@@ -16,7 +16,7 @@ import java.util.List;
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
     
-    // Find messages in a chat room (excluding deleted messages)
+    // Find messages in a chat room 
     @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.isDeleted = false ORDER BY cm.createdAt ASC")
     List<ChatMessage> findByChatRoomIdAndIsDeletedFalseOrderByCreatedAtAsc(@Param("roomId") Long roomId);
     
@@ -31,7 +31,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("SELECT cm FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.createdAt > :timestamp AND cm.isDeleted = false ORDER BY cm.createdAt ASC")
     List<ChatMessage> findByChatRoomIdAndCreatedAtAfterAndIsDeletedFalse(@Param("roomId") Long roomId, @Param("timestamp") LocalDateTime timestamp);
     
-    // Count unread messages for a user in a room (simplified - counts messages from other users)
+    // Count unread messages for a user in a room 
     @Query("SELECT COUNT(cm) FROM ChatMessage cm WHERE cm.chatRoom.id = :roomId AND cm.sender.id != :userId AND cm.isDeleted = false")
     long countUnreadMessagesInRoom(@Param("roomId") Long roomId, @Param("userId") Long userId);
     

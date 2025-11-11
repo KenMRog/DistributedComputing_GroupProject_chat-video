@@ -12,6 +12,7 @@ import {
   Tab,
   Container
 } from '@mui/material';
+import logo from '../static/logo.png';
 import { useAuth } from '../context/AuthContext';
 
 function TabPanel({ children, value, index, ...other }) {
@@ -100,11 +101,16 @@ const LoginComponent = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 8 }}>
+    <Container maxWidth="sm" sx={{ mt: 6, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Large logo above the login card */}
+        <Box className="logo-bg logo-bg--solid" sx={{ width: 200, height: 200, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box component="img" src={logo} alt="Gatherly logo" sx={{ width: 160, height: 160, objectFit: 'contain', display: 'block' }} onError={(e)=>{e.target.style.display='none'}} />
+        </Box>
+
       <Card sx={{ maxWidth: 500, mx: 'auto' }}>
         <CardContent>
           <Typography variant="h4" component="h1" align="center" gutterBottom>
-            Welcome to ScreenShare
+            Welcome to Gatherly
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
             Sign in or create an account to continue

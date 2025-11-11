@@ -20,14 +20,24 @@ export const SocketProvider = ({ children }) => {
     const socket = new SockJS('http://localhost:8080/api/ws');
     const client = Stomp.over(socket);
     
+    // Filter or simplify verbose library debug logs (some implementations log 'connected to server undefined')
     client.debug = (str) => {
-      console.log('STOMP: ' + str);
+      // suppress noisy 'connected to server undefined' messages or simplify them
+      if (typeof str === 'string' && str.includes('connected to server')) {
+        // try to print a clearer message with the underlying transport URL when available
+        const serverUrl = socket && socket._transport && socket._transport.url ? socket._transport.url : 'unknown';
+        console.log(`STOMP: connected to server ${serverUrl}`);
+      } else {
+        console.log('STOMP: ' + str);
+      }
     };
 
     client.connect({}, () => {
       setStompClient(client);
       setConnected(true);
-      console.log('Connected to WebSocket');
+      // show resolved transport URL (SockJS transport exposes _transport.url)
+      const serverUrl = socket && socket._transport && socket._transport.url ? socket._transport.url : 'unknown';
+      console.log('Connected to WebSocket, server:', serverUrl);
     }, (error) => {
       console.error('WebSocket connection error:', error);
       setConnected(false);

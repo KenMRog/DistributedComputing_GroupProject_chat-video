@@ -27,6 +27,7 @@ import {
 import {
   Search as SearchIcon,
   Add as AddIcon,
+  GroupAdd as GroupAddIcon,
   Person as PersonIcon,
   Chat as ChatIcon,
   Notifications as NotificationsIcon,
@@ -39,11 +40,18 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingInvites, setPendingInvites] = useState([]);
   const [newChatDialogOpen, setNewChatDialogOpen] = useState(false);
+  const [newRoomDialogOpen, setNewRoomDialogOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [allUsers, setAllUsers] = useState([]);
+  const [inviteSearchTerm, setInviteSearchTerm] = useState('');
+  const [inviteResults, setInviteResults] = useState([]);
   const { user } = useAuth();
+
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomDescription, setNewRoomDescription] = useState('');
+  const [newRoomIsPrivate, setNewRoomIsPrivate] = useState(false);
 
   // Fetch user's chat rooms
   const fetchChatRooms = async () => {
@@ -94,6 +102,32 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     }
   }, [user]);
 
+  // Fetch users for new DM invite search (top 5 match)
+  const fetchUsersForInvite = async (q) => {
+    try {
+      const base = `http://localhost:8080/api/users`;
+      const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}` : `${base}?excludeActiveDmWith=${user.id}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setInviteResults(data.filter(u => u.id !== user.id));
+      }
+    } catch (error) {
+      console.error('Error fetching users for invite:', error);
+    }
+  };
+
+  // Debounce search when new chat dialog open
+  useEffect(() => {
+    let t;
+    if (newChatDialogOpen) {
+      t = setTimeout(() => {
+        fetchUsersForInvite(inviteSearchTerm);
+      }, 300);
+    }
+    return () => clearTimeout(t);
+  }, [inviteSearchTerm, newChatDialogOpen]);
+
   const handleNewChat = async () => {
     if (!selectedUserId) return;
 
@@ -105,7 +139,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
         },
         body: JSON.stringify({
           invitedUserId: parseInt(selectedUserId),
-          message: inviteMessage,
+          description: inviteMessage,
         }),
       });
 
@@ -188,9 +222,14 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           </Typography>
           <Box>
             <IconButton onClick={() => setInboxOpen(true)} color="primary" sx={{ mr: 1 }} title="Inbox">
-              <MailIcon />
+              <Badge badgeContent={pendingInvites.length} color="error">
+                <MailIcon />
+              </Badge>
             </IconButton>
-            <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary">
+            <IconButton onClick={() => setNewRoomDialogOpen(true)} color="primary" sx={{ mr: 1 }} title="Create Room">
+              <GroupAddIcon />
+            </IconButton>
+            <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary" title="New DM">
               <AddIcon />
             </IconButton>
           </Box>
@@ -213,34 +252,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
         />
       </Box>
 
-      {/* Pending Invites */}
-      {pendingInvites.length > 0 && (
-        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>
-            Message Requests
-          </Typography>
-          {pendingInvites.map((invite) => (
-            <Box key={invite.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                {invite.inviter.displayName || invite.inviter.username} wants to chat
-              </Typography>
-              {invite.message && (
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                  "{invite.message}"
-                </Typography>
-              )}
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button size="small" variant="contained" onClick={() => handleAcceptInvite(invite.id)}>
-                  Accept
-                </Button>
-                <Button size="small" variant="outlined" onClick={() => handleDeclineInvite(invite.id)}>
-                  Decline
-                </Button>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      )}
+      {/* pending invites are shown via badge on the Inbox icon */}
 
       {/* Chat List */}
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
@@ -270,12 +282,34 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText
-                    primary={otherUser ? (otherUser.displayName || otherUser.username) : chat.name}
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box component="span" sx={{ fontWeight: 500 }}>{otherUser ? (otherUser.displayName || otherUser.username) : chat.name}</Box>
+                        {(chat.roomType === 'PRIVATE' || chat.roomType === 'PUBLIC') && (
+                          <Chip
+                            size="small"
+                            label={chat.roomType === 'PRIVATE' ? 'Private' : 'Public'}
+                            variant="outlined"
+                            color={chat.roomType === 'PRIVATE' ? 'default' : 'primary'}
+                          />
+                        )}
+                      </Box>
+                    }
                     secondary={
                       <Box>
                         <Typography variant="caption" color="text.secondary">
                           {formatLastActivity(chat.lastActivityAt)}
                         </Typography>
+                        {chat.description && (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            noWrap
+                            sx={{ mt: 0.5 }}
+                          >
+                            {chat.description.length > 90 ? chat.description.slice(0, 90) + '…' : chat.description}
+                          </Typography>
+                        )}
                       </Box>
                     }
                   />
@@ -290,38 +324,119 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
       <Dialog open={newChatDialogOpen} onClose={() => setNewChatDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Start New Chat</DialogTitle>
         <DialogContent>
-          <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>Select User</InputLabel>
-            <Select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              label="Select User"
-            >
-              {allUsers
-                .filter(u => u.id !== user.id)
-                .map((user) => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.displayName || user.username}
-                  </MenuItem>
-                ))}
-            </Select>
-          </FormControl>
-          
+          <TextField
+            fullWidth
+            placeholder="Search users by name, username or email"
+            value={inviteSearchTerm}
+            onChange={(e) => setInviteSearchTerm(e.target.value)}
+            sx={{ mb: 1 }}
+          />
+
+          <List sx={{ maxHeight: 200, overflow: 'auto' }}>
+            {inviteResults.map((u) => (
+              <ListItem key={u.id} button selected={selectedUserId === String(u.id)} onClick={() => setSelectedUserId(String(u.id))}>
+                <ListItemAvatar>
+                  <Avatar>{(u.displayName || u.username || '').charAt(0).toUpperCase()}</Avatar>
+                </ListItemAvatar>
+                <ListItemText primary={u.displayName || u.username} secondary={u.email || ''} />
+              </ListItem>
+            ))}
+            {inviteResults.length === 0 && (
+              <ListItem>
+                <ListItemText primary="No matching users" />
+              </ListItem>
+            )}
+          </List>
+
           <TextField
             fullWidth
             multiline
             rows={3}
-            label="Message (optional)"
+            label="Description (required)"
             value={inviteMessage}
             onChange={(e) => setInviteMessage(e.target.value)}
             sx={{ mt: 2 }}
-            placeholder="Send a message with your invite..."
+            placeholder="Describe the chat (this will be shown at the top and is searchable)"
+            required
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setNewChatDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleNewChat} variant="contained" disabled={!selectedUserId}>
+          <Button onClick={handleNewChat} variant="contained" disabled={!selectedUserId || !inviteMessage.trim()}>
             Send Invite
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New Room Dialog */}
+      <Dialog open={newRoomDialogOpen} onClose={() => setNewRoomDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create New Room</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Room Name"
+            value={newRoomName}
+            onChange={(e) => setNewRoomName(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label="Description (required)"
+            value={newRoomDescription}
+            onChange={(e) => setNewRoomDescription(e.target.value)}
+            sx={{ mt: 2 }}
+            placeholder="Describe the room (this will be shown at the top and is searchable)"
+            required
+          />
+
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel id="room-privacy-label">Privacy</InputLabel>
+            <Select
+              labelId="room-privacy-label"
+              value={newRoomIsPrivate ? 'private' : 'public'}
+              label="Privacy"
+              onChange={(e) => setNewRoomIsPrivate(e.target.value === 'private')}
+            >
+              <MenuItem value="public">Public (anyone can join)</MenuItem>
+              <MenuItem value="private">Private (invite only)</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewRoomDialogOpen(false)}>Cancel</Button>
+          <Button onClick={async () => {
+            // Create room via backend
+            try {
+              const payload = {
+                name: newRoomName,
+                description: newRoomDescription,
+                isPrivate: newRoomIsPrivate,
+              };
+
+              const response = await fetch(`http://localhost:8080/api/chat/rooms?creatorId=${user.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+
+              if (response.ok) {
+                setNewRoomDialogOpen(false);
+                setNewRoomName('');
+                setNewRoomDescription('');
+                setNewRoomIsPrivate(false);
+                // Refresh chat list
+                fetchChatRooms();
+              } else {
+                console.error('Error creating room', response.statusText);
+              }
+            } catch (err) {
+              console.error('Error creating room', err);
+            }
+          }} variant="contained" disabled={!newRoomName || !newRoomDescription.trim()}>
+            Create
           </Button>
         </DialogActions>
       </Dialog>
@@ -339,9 +454,9 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
               <Typography variant="body2" sx={{ mb: 1 }}>
                 {invite.inviter.displayName || invite.inviter.username} wants to chat
               </Typography>
-              {invite.message && (
+              {invite.chatRoom?.description && (
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                  "{invite.message}"
+                  {invite.chatRoom.description}
                 </Typography>
               )}
               <Box sx={{ display: 'flex', gap: 1 }}>

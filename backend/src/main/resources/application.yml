@@ -8,7 +8,9 @@ spring:
     name: screenshare-backend
   
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    # Default to production so the application uses Azure SQL by default
+    # To override, set SPRING_PROFILES_ACTIVE env var locally.
+    active: ${SPRING_PROFILES_ACTIVE:production}
   
   datasource:
     url: ${DB_URL:jdbc:h2:mem:testdb}
