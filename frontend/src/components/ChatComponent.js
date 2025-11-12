@@ -84,7 +84,7 @@ const ChatComponent = ({ chatRoom }) => {
   // Load historical messages when chat room changes
   useEffect(() => {
     const loadMessages = async () => {
-      if (chatRoom && user) {
+      if (chatRoom && user?.id) {
         try {
           const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/messages?userId=${user.id}`);
           if (response.ok) {
@@ -103,16 +103,20 @@ const ChatComponent = ({ chatRoom }) => {
           console.error('Failed to load messages:', error);
           setMessages([]); // Start with empty if loading fails
         }
+      } else if (!user?.id) {
+        // Clear messages if user is logged out
+        setMessages([]);
       }
     };
 
     loadMessages();
-  }, [chatRoom, user]);
+  }, [chatRoom, user?.id]);
 
   useEffect(() => {
-    if (connected && subscribe && username && chatRoom) {
+    if (connected && subscribe && username && chatRoom && user?.id) {
       const chatTopic = `/topic/chat/${chatRoom.id}`;
       const screenshareTopic = `/topic/screenshare/${chatRoom.id}`;
+      const currentUserId = user.id; // Store user.id in closure to avoid stale reference
       
       const chatSubscription = subscribe(chatTopic, (message) => {
         const receivedMessage = JSON.parse(message.body);
@@ -121,7 +125,8 @@ const ChatComponent = ({ chatRoom }) => {
 
       const screenshareSubscription = subscribe(screenshareTopic, (message) => {
         const data = JSON.parse(message.body);
-        if (data.userId !== user.id) {
+        // Use stored currentUserId instead of user.id to avoid null reference
+        if (data.userId !== currentUserId) {
           if (data.action === 'start') {
             setRemoteStream(data);
             setScreenshareDialog(true);
@@ -141,10 +146,14 @@ const ChatComponent = ({ chatRoom }) => {
           screenshareSubscription.unsubscribe();
         }
       };
+    } else if (!user?.id) {
+      // Disconnect if user logs out
+      setIsConnected(false);
     }
-  }, [connected, subscribe, username, sendMessage, chatRoom, user.id]);
+  }, [connected, subscribe, username, sendMessage, chatRoom, user?.id]);
 
   const fetchUsersForInvite = async (q) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const base = `http://localhost:8080/api/users`;
   const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}` : `${base}?excludeActiveDmWith=${user.id}&excludeMemberOfRoom=${chatRoom?.id}`;
@@ -178,7 +187,7 @@ const ChatComponent = ({ chatRoom }) => {
   }, [inviteSearchTerm, inviteDialogOpen]);
 
   const handleSendInvites = async () => {
-    if (!chatRoom || !selectedInviteUserIds.length) return;
+    if (!chatRoom || !selectedInviteUserIds.length || !user?.id) return;
     try {
       const payload = { invitedUserIds: selectedInviteUserIds };
       const resp = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/invites?inviterId=${user.id}`, {
@@ -201,7 +210,7 @@ const ChatComponent = ({ chatRoom }) => {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (newMessage.trim() && username && chatRoom) {
+    if (newMessage.trim() && username && chatRoom && user?.id) {
       const message = {
         content: newMessage,
         sender: username,
@@ -230,7 +239,7 @@ const ChatComponent = ({ chatRoom }) => {
       }
 
       // Notify other user in the chat room about screen share
-      if (connected && sendMessage && chatRoom) {
+      if (connected && sendMessage && chatRoom && user?.id) {
         sendMessage(`/app/screenshare/${chatRoom.id}/start`, {
           userId: user.id,
           username: username,
@@ -257,7 +266,7 @@ const ChatComponent = ({ chatRoom }) => {
     setScreenshareDialog(false);
 
     // Notify other user about stopping screen share
-    if (connected && sendMessage && chatRoom) {
+    if (connected && sendMessage && chatRoom && user?.id) {
       sendMessage(`/app/screenshare/${chatRoom.id}/stop`, {
         userId: user.id,
         username: username,
@@ -279,7 +288,7 @@ const ChatComponent = ({ chatRoom }) => {
   }
 
   const getOtherUser = () => {
-    if (chatRoom && chatRoom.members && chatRoom.members.length === 2) {
+    if (chatRoom && chatRoom.members && chatRoom.members.length === 2 && user?.id) {
       return chatRoom.members.find(member => member.id !== user.id);
     }
     return null;
@@ -359,7 +368,7 @@ const ChatComponent = ({ chatRoom }) => {
             </motion.div>
           </Grid>
           <Grid item>
-            {chatRoom?.roomType === 'PRIVATE' && user && chatRoom?.createdById === user.id && (
+            {chatRoom?.roomType === 'PRIVATE' && user?.id && chatRoom?.createdById === user.id && (
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -392,7 +401,7 @@ const ChatComponent = ({ chatRoom }) => {
         <List sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
           <AnimatePresence initial={false}>
             {messages.map((message, index) => {
-              const isOwnMessage = message.senderId === user.id;
+              const isOwnMessage = user?.id && message.senderId === user.id;
               return (
                 <motion.div
                   key={`${message.timestamp || index}-${message.content}`}

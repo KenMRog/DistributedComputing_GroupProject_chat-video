@@ -56,6 +56,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
 
   // Fetch user's chat rooms
   const fetchChatRooms = async () => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/rooms?userId=${user.id}`);
       if (response.ok) {
@@ -69,6 +70,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
 
   // Fetch pending invites
   const fetchPendingInvites = async () => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invites/pending?userId=${user.id}`);
       if (response.ok) {
@@ -96,15 +98,21 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       fetchChatRooms();
       fetchPendingInvites();
       fetchAllUsers();
+    } else {
+      // Clear data when user logs out
+      setChats([]);
+      setPendingInvites([]);
+      setAllUsers([]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   // Fetch users for new DM invite search (top 5 match)
   const fetchUsersForInvite = async (q) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const base = `http://localhost:8080/api/users`;
       const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}` : `${base}?excludeActiveDmWith=${user.id}`;
@@ -130,7 +138,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   }, [inviteSearchTerm, newChatDialogOpen]);
 
   const handleNewChat = async () => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !user?.id) return;
 
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite?inviterId=${user.id}`, {
@@ -157,6 +165,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   const handleAcceptInvite = async (inviteId) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/accept?userId=${user.id}`, {
         method: 'POST',
@@ -173,6 +182,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   const handleDeclineInvite = async (inviteId) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/decline?userId=${user.id}`, {
         method: 'POST',
@@ -192,7 +202,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   );
 
   const getOtherUser = (chat) => {
-    if (chat.members && chat.members.length === 2) {
+    if (chat.members && chat.members.length === 2 && user?.id) {
       return chat.members.find(member => member.id !== user.id);
     }
     return null;
@@ -463,6 +473,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           <Button onClick={() => setNewRoomDialogOpen(false)}>Cancel</Button>
           <Button onClick={async () => {
             // Create room via backend
+            if (!user?.id) return; // Early return if user is null
             try {
               const payload = {
                 name: newRoomName,
@@ -489,7 +500,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
             } catch (err) {
               console.error('Error creating room', err);
             }
-          }} variant="contained" disabled={!newRoomName || !newRoomDescription.trim()}>
+          }} variant="contained" disabled={!newRoomName || !newRoomDescription.trim() || !user?.id}>
             Create
           </Button>
         </DialogActions>

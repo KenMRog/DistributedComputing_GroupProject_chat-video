@@ -9,7 +9,7 @@ import AuthGuard from './components/AuthGuard';
 import { SocketProvider } from './context/SocketContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
-import logo from './static/logo.png';
+import logoNoText from './static/logonotext.png';
 import './App.css';
 
 function AppContent() {
@@ -18,6 +18,7 @@ function AppContent() {
   const { mode, toggleTheme } = useTheme();
 
   const handleLogout = () => {
+    setSelectedChat(null); // Clear selected chat before logout
     logout();
   };
 
@@ -53,13 +54,15 @@ function AppContent() {
               >
                 <Box
                   component="img"
-                  src={logo}
+                  src={logoNoText}
                   alt="Gatherly logo"
                   sx={{
                     height: 40,
                     width: 40,
                     objectFit: 'contain',
                     cursor: 'pointer',
+                    filter: mode === 'light' ? 'invert(1)' : 'none',
+                    transition: 'filter 0.3s ease',
                   }}
                   onError={(e) => {
                     e.target.style.display = 'none';
