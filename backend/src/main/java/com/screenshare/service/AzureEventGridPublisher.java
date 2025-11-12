@@ -4,7 +4,9 @@ import com.azure.core.util.BinaryData;
 import com.azure.messaging.eventgrid.EventGridEvent;
 import com.azure.messaging.eventgrid.EventGridPublisherClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.screenshare.model.ChatEvent;
 import com.screenshare.model.HelloWorldEvent;
+import com.screenshare.model.ScreenShareEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,10 @@ import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.UUID;
 
+/**
+ * Service for publishing events to Azure Event Grid
+ * Supports chat events, screen share events, and generic domain events
+ */
 @Service
 @ConditionalOnProperty(name = {"azure.eventgrid.endpoint", "azure.eventgrid.key"}, matchIfMissing = false)
 public class AzureEventGridPublisher {
@@ -39,8 +45,122 @@ public class AzureEventGridPublisher {
     }
     
     /**
-     * Publish an event to Event Grid Domain
+     * Publish a chat event to Event Grid
      */
+    public void publishChatEvent(ChatEvent chatEvent) {
+        if (publisherClient == null) {
+            logger.warn("Event Grid Publisher Client is not configured. Skipping chat event publication.");
+            return;
+        }
+        
+        try {
+            EventGridEvent event = new EventGridEvent(
+                    chatEvent.getSubject(),
+                    chatEvent.getEventType(),
+                    BinaryData.fromObject(chatEvent.getData()),
+                    chatEvent.getDataVersion()
+            );
+            event.setId(chatEvent.getId());
+            event.setEventTime(OffsetDateTime.parse(chatEvent.getEventTime()));
+            
+            publisherClient.sendEvents(Collections.singletonList(event));
+            logger.info("Chat event published to Event Grid: type={}, subject={}", 
+                    chatEvent.getEventType(), chatEvent.getSubject());
+        } catch (Exception e) {
+            logger.error("Error publishing chat event to Event Grid", e);
+            // Don't throw - this is a non-critical operation
+        }
+    }
+    
+    /**
+     * Publish a screen share event to Event Grid
+     */
+    public void publishScreenShareEvent(ScreenShareEvent screenShareEvent) {
+        if (publisherClient == null) {
+            logger.warn("Event Grid Publisher Client is not configured. Skipping screen share event publication.");
+            return;
+        }
+        
+        try {
+            EventGridEvent event = new EventGridEvent(
+                    screenShareEvent.getSubject(),
+                    screenShareEvent.getEventType(),
+                    BinaryData.fromObject(screenShareEvent.getData()),
+                    screenShareEvent.getDataVersion()
+            );
+            event.setId(screenShareEvent.getId());
+            event.setEventTime(OffsetDateTime.parse(screenShareEvent.getEventTime()));
+            
+            publisherClient.sendEvents(Collections.singletonList(event));
+            logger.info("Screen share event published to Event Grid: type={}, subject={}", 
+                    screenShareEvent.getEventType(), screenShareEvent.getSubject());
+        } catch (Exception e) {
+            logger.error("Error publishing screen share event to Event Grid", e);
+            // Don't throw - this is a non-critical operation
+        }
+    }
+    
+    /**
+     * Publish a chat event to Event Grid Topic
+     */
+    public void publishChatEventToTopic(ChatEvent chatEvent) {
+        if (topicPublisherClient == null) {
+            logger.warn("Event Grid Topic Publisher Client is not configured. Skipping chat event publication.");
+            return;
+        }
+        
+        try {
+            EventGridEvent event = new EventGridEvent(
+                    chatEvent.getSubject(),
+                    chatEvent.getEventType(),
+                    BinaryData.fromObject(chatEvent.getData()),
+                    chatEvent.getDataVersion()
+            );
+            event.setId(chatEvent.getId());
+            event.setEventTime(OffsetDateTime.parse(chatEvent.getEventTime()));
+            
+            topicPublisherClient.sendEvents(Collections.singletonList(event));
+            logger.info("Chat event published to Event Grid Topic: type={}, subject={}", 
+                    chatEvent.getEventType(), chatEvent.getSubject());
+        } catch (Exception e) {
+            logger.error("Error publishing chat event to Event Grid Topic", e);
+            // Don't throw - this is a non-critical operation
+        }
+    }
+    
+    /**
+     * Publish a screen share event to Event Grid Topic
+     */
+    public void publishScreenShareEventToTopic(ScreenShareEvent screenShareEvent) {
+        if (topicPublisherClient == null) {
+            logger.warn("Event Grid Topic Publisher Client is not configured. Skipping screen share event publication.");
+            return;
+        }
+        
+        try {
+            EventGridEvent event = new EventGridEvent(
+                    screenShareEvent.getSubject(),
+                    screenShareEvent.getEventType(),
+                    BinaryData.fromObject(screenShareEvent.getData()),
+                    screenShareEvent.getDataVersion()
+            );
+            event.setId(screenShareEvent.getId());
+            event.setEventTime(OffsetDateTime.parse(screenShareEvent.getEventTime()));
+            
+            topicPublisherClient.sendEvents(Collections.singletonList(event));
+            logger.info("Screen share event published to Event Grid Topic: type={}, subject={}", 
+                    screenShareEvent.getEventType(), screenShareEvent.getSubject());
+        } catch (Exception e) {
+            logger.error("Error publishing screen share event to Event Grid Topic", e);
+            // Don't throw - this is a non-critical operation
+        }
+    }
+    
+    /**
+     * Publish an event to Event Grid Domain (Legacy HelloWorld support)
+     * @deprecated Use publishChatEvent or publishScreenShareEvent instead
+     */
+    @Deprecated
     public void publishEvent(HelloWorldEvent helloWorldEvent) {
         if (publisherClient == null) {
             logger.error("Event Grid Publisher Client is not configured");
@@ -74,8 +194,10 @@ public class AzureEventGridPublisher {
     }
     
     /**
-     * Publish an event to Event Grid Topic
+     * Publish an event to Event Grid Topic (Legacy HelloWorld support)
+     * @deprecated Use publishChatEventToTopic or publishScreenShareEventToTopic instead
      */
+    @Deprecated
     public void publishEventToTopic(HelloWorldEvent helloWorldEvent) {
         if (topicPublisherClient == null) {
             logger.error("Event Grid Topic Publisher Client is not configured");

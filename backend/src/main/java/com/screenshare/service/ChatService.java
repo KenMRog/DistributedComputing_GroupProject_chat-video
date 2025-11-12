@@ -29,6 +29,9 @@ public class ChatService {
 
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private NotificationService notificationService;
 
     // Create a direct message chat between two users
     public ChatRoom createDirectMessageChat(Long userId1, Long userId2, String description) {
@@ -99,9 +102,16 @@ public class ChatService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + userId));
 
-        if (!room.isMember(user)) {
+        boolean isNewMember = !room.isMember(user);
+        
+        if (isNewMember) {
             room.addMember(user);
-            chatRoomRepository.save(room);
+            ChatRoom savedRoom = chatRoomRepository.save(room);
+            
+            // Send Azure notifications for new member
+            notificationService.notifyUserJoinedRoom(user, savedRoom);
+            
+            return savedRoom;
         }
 
         return room;
@@ -127,7 +137,12 @@ public class ChatService {
     // Create invite 
     ChatInvite invite = new ChatInvite(chatRoom, invitedUser, inviter, null);
         invite.setExpiresAt(LocalDateTime.now().plusDays(7));
-        return chatInviteRepository.save(invite);
+        ChatInvite savedInvite = chatInviteRepository.save(invite);
+        
+        // Send Azure notifications
+        notificationService.notifyInviteSent(savedInvite);
+        
+        return savedInvite;
     }
 
     // Create an invite for an existing chat room 
@@ -158,7 +173,12 @@ public class ChatService {
         ChatInvite invite = new ChatInvite(chatRoom, invitedUser, inviter, null);
         invite.setExpiresAt(LocalDateTime.now().plusDays(7));
 
-        return chatInviteRepository.save(invite);
+        ChatInvite savedInvite = chatInviteRepository.save(invite);
+        
+        // Send Azure notifications
+        notificationService.notifyInviteSent(savedInvite);
+        
+        return savedInvite;
     }
 
     // Accept a chat invite
@@ -203,9 +223,13 @@ public class ChatService {
             chatRoom.addMember(invite.getInvitedUser());
         }
 
-        chatRoomRepository.save(chatRoom);
-
-        return chatRoom;
+        ChatRoom savedRoom = chatRoomRepository.save(chatRoom);
+        
+        // Send Azure notifications
+        notificationService.notifyInviteAccepted(invite);
+        notificationService.notifyUserJoinedRoom(invite.getInvitedUser(), savedRoom);
+        
+        return savedRoom;
     }
 
     // Decline a chat invite
@@ -309,6 +333,9 @@ public class ChatService {
         // Update room's last activity
         chatRoom.setLastActivityAt(LocalDateTime.now());
         chatRoomRepository.save(chatRoom);
+        
+        // Send Azure notifications for new message
+        notificationService.notifyMessageSent(savedMessage, chatRoom);
         
         return savedMessage;
     }

@@ -41,8 +41,13 @@ spring:
 azure:
   servicebus:
     connection-string: ${AZURE_SERVICEBUS_CONNECTION_STRING:}
-    queue-name: ${AZURE_SERVICEBUS_QUEUE_NAME:screenshare-queue}
-    topic-name: ${AZURE_SERVICEBUS_TOPIC_NAME:screenshare-topic}
+    queue-name: ${AZURE_SERVICEBUS_QUEUE_NAME:chatapp-notifications-queue}
+    topic-name: ${AZURE_SERVICEBUS_TOPIC_NAME:chatapp-notifications-topic}
+    subscription-name: ${AZURE_SERVICEBUS_SUBSCRIPTION_NAME:chatapp-notifications-subscription}
+  eventgrid:
+    endpoint: ${AZURE_EVENTGRID_ENDPOINT:}
+    key: ${AZURE_EVENTGRID_KEY:}
+    topic-endpoint: ${AZURE_EVENTGRID_TOPIC_ENDPOINT:}
   storage:
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING:}
     container-name: ${AZURE_STORAGE_CONTAINER_NAME:screenshare-files}

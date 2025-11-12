@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build: ./backend
@@ -31,8 +29,6 @@ services:
       # AWS Configuration (Optional)
       - SQS_QUEUE_URL=${SQS_QUEUE_URL}
       - SNS_TOPIC_ARN=${SNS_TOPIC_ARN}
-    depends_on:
-      - db
     volumes:
       - ./logs:/app/logs
 
