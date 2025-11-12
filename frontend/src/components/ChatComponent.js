@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import { formatDateTimeLocal } from '../utils/timeUtils';
 
 const ChatComponent = ({ chatRoom }) => {
   const [messages, setMessages] = useState([]);
@@ -333,7 +334,7 @@ const ChatComponent = ({ chatRoom }) => {
                 sx={{ 
                   mb: 1, 
                   display: 'flex',
-                  flexDirection: isOwnMessage ? 'row-reverse' : 'row',
+                  flexDirection: 'row',
                   justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
                   width: '100%'
                 }}
@@ -349,9 +350,7 @@ const ChatComponent = ({ chatRoom }) => {
                     minWidth: '100px',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: isOwnMessage ? 'flex-end' : 'flex-start',
-                    ml: isOwnMessage ? 'auto' : 0,
-                    mr: isOwnMessage ? 2 : 0
+                    alignItems: isOwnMessage ? 'flex-end' : 'flex-start'
                   }}
                 >
                   {!isOwnMessage && (
@@ -388,12 +387,12 @@ const ChatComponent = ({ chatRoom }) => {
                       color: '#cccccc'
                     }}
                   >
-                    {message.timestamp && new Date(message.timestamp).toLocaleTimeString()}
+                    {message.timestamp && formatDateTimeLocal(message.timestamp)}
                   </Typography>
                 </Box>
                 {isOwnMessage && (
-                  <Avatar sx={{ ml: 2, bgcolor: 'primary.main' }}>
-                    {username?.charAt(0).toUpperCase()}
+                  <Avatar sx={{ ml: 2, bgcolor: 'primary.main' }} title={username || user?.name || user?.email}>
+                    {(username || user?.name || user?.username)?.charAt(0).toUpperCase()}
                   </Avatar>
                 )}
               </ListItem>
@@ -409,7 +408,7 @@ const ChatComponent = ({ chatRoom }) => {
             color="primary"
             fullWidth
             variant="outlined"
-            placeholder="iMessage"
+            placeholder="Message"
             multiline
             maxRows={4}
             value={newMessage}
