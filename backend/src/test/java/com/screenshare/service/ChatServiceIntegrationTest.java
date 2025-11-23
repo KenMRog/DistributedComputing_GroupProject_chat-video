@@ -14,12 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {"spring.jpa.hibernate.ddl-auto=create-drop"})
+@ActiveProfiles("dev")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
 @Transactional
 public class ChatServiceIntegrationTest {
@@ -44,11 +46,7 @@ public class ChatServiceIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        chatInviteRepository.deleteAll();
-        chatMessageRepository.deleteAll();
-        chatRoomRepository.deleteAll();
-        userRepository.deleteAll();
-
+        // With create-drop DDL the schema is created for each test context; no need to delete existing rows.
         alice = new User("alice", "alice@example.com", "password");
         bob = new User("bob", "bob@example.com", "password");
         userRepository.save(alice);
