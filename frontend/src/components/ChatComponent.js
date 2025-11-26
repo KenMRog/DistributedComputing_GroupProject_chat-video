@@ -37,6 +37,43 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatDateTimeLocal } from '../utils/timeUtils';
 
+// Scrollbar styling
+const scrollbarStyles = `
+  /* Messages scrollbar (slightly more visible) */
+  .chat-messages-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .chat-messages-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chat-messages-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 3px;
+  }
+  .chat-messages-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  /* Profile scrollbar (less visible) */
+  .chat-profile-scroll {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: rgba(0,0,0,0.12) transparent; /* Firefox */
+  }
+  .chat-profile-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .chat-profile-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chat-profile-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 3px;
+  }
+  .chat-profile-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.24);
+  }
+`;
+
 const ChatComponent = ({ chatRoom }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -72,11 +109,25 @@ const ChatComponent = ({ chatRoom }) => {
   const inputFieldBg = isLight ? '#f5f5f5' : '#444444';
   const inputBorder = isLight ? '#e0e0e0' : '#666666';
   const inputBorderHover = isLight ? '#b0b0b0' : '#888888';
-  const sendButtonDisabled = isLight ? '#cccccc' : '#666666';
+  // Use theme primary variants for the send button so it matches the app blue theme
+  const sendButtonDisabled = isLight
+    ? (appTheme.palette.primary.light || '#90caf9')
+    : (appTheme.palette.primary.dark || appTheme.palette.primary.main || '#1976d2');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    // Inject scrollbar styles
+    const styleSheet = document.createElement('style');
+    styleSheet.innerText = scrollbarStyles;
+    document.head.appendChild(styleSheet);
+    
+    return () => {
+      document.head.removeChild(styleSheet);
+    };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -398,178 +449,296 @@ const ChatComponent = ({ chatRoom }) => {
         </Grid>
       </Paper>
 
-      <Paper sx={{ flexGrow: 1, mb: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column', bgcolor: chatBackground }}>
-        <List sx={{ flexGrow: 1, overflow: 'auto', p: 1 }}>
-          <AnimatePresence initial={false}>
-            {messages.map((message, index) => {
-              const isOwnMessage = user?.id && message.senderId === user.id;
-              return (
-                <motion.div
-                  key={`${message.timestamp || index}-${message.content}`}
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95, height: 0 }}
-                  transition={{ 
-                    duration: 0.2,
-                    delay: index === messages.length - 1 ? 0.1 : 0
-                  }}
-                  layout
-                >
-                  <ListItem 
-                    alignItems="flex-start" 
-                    sx={{ 
-                      mb: 1, 
-                      display: 'flex',
-                      flexDirection: isOwnMessage ? 'row-reverse' : 'row',
-                      justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
-                      width: '100%'
-                    }}
-                  >
-                {!isOwnMessage && (
-                  <Avatar sx={{ mr: 2, bgcolor: 'secondary.main' }}>
-                    {message.sender?.charAt(0).toUpperCase()}
-                  </Avatar>
-                )}
-                <Box
-                  sx={{
-                    maxWidth: '70%',
-                    minWidth: '100px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: isOwnMessage ? 'flex-end' : 'flex-start'
-                  }}
-                >
-                  {!isOwnMessage && (
-                    <Typography 
-                      variant="caption" 
-                      sx={{ mb: 0.5, ml: 1, color: textSecondary }}
+      {/* Main Chat Layout with Messages on Left and Profile on Right */}
+      <Grid container spacing={2} sx={{ flexGrow: 1, mb: 0, overflow: 'hidden', height: 'calc(100% - 140px)' }}>
+        {/* Messages Section - Left Side (100% on xs/sm, 70% on md+) */}
+        <Grid item xs={12} md={8} sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+          <Paper sx={{ flexGrow: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', bgcolor: chatBackground, height: '100%', minHeight: 0 }}>
+            <List sx={{ flexGrow: 1, overflow: 'auto', p: 1, minHeight: 0 }} className="chat-messages-scroll">
+              <AnimatePresence initial={false}>
+                {messages.map((message, index) => {
+                  const isOwnMessage = user?.id && message.senderId === user.id;
+                  return (
+                    <motion.div
+                      key={`${message.timestamp || index}-${message.content}`}
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95, height: 0 }}
+                      transition={{ 
+                        duration: 0.2,
+                        delay: index === messages.length - 1 ? 0.1 : 0
+                      }}
+                      layout
                     >
-                      {message.sender}
-                    </Typography>
-                  )}
-                  <Paper
-                    elevation={isLight ? 0 : 1}
-                    sx={{
-                      p: 1.5,
-                      bgcolor: isOwnMessage ? messageBubbleOwn : messageBubbleOther,
-                      color: isOwnMessage 
-                        ? '#ffffff' 
-                        : (isLight ? textPrimary : '#ffffff'),
-                      borderRadius: isOwnMessage 
-                        ? '18px 18px 4px 18px' 
-                        : '18px 18px 18px 4px',
-                      wordBreak: 'break-word',
-                      border: isLight && !isOwnMessage ? `1px solid ${appTheme.palette.divider}` : 'none'
-                    }}
+                      <ListItem 
+                        alignItems="flex-start" 
+                        sx={{ 
+                          mb: 1, 
+                          display: 'flex',
+                          flexDirection: 'row',
+                          justifyContent: isOwnMessage ? 'flex-end' : 'flex-start',
+                          width: '100%',
+                          paddingLeft: 0,
+                          paddingRight: 0
+                        }}
+                      >
+                    {!isOwnMessage && (
+                      <Avatar sx={{ mr: 2, bgcolor: 'secondary.main', flexShrink: 0 }}>
+                        {message.sender?.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                    <Box
+                      sx={{
+                        maxWidth: '70%',
+                        minWidth: '100px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: isOwnMessage ? 'flex-end' : 'flex-start'
+                      }}
+                    >
+                      {!isOwnMessage && (
+                        <Typography 
+                          variant="caption" 
+                          sx={{ mb: 0.5, ml: 1, color: textSecondary }}
+                        >
+                          {message.sender}
+                        </Typography>
+                      )}
+                      <Paper
+                        elevation={isLight ? 0 : 1}
+                        sx={{
+                          p: 1.5,
+                          bgcolor: isOwnMessage ? messageBubbleOwn : messageBubbleOther,
+                          color: isOwnMessage 
+                            ? '#ffffff' 
+                            : (isLight ? textPrimary : '#ffffff'),
+                          borderRadius: isOwnMessage 
+                            ? '18px 18px 4px 18px' 
+                            : '18px 18px 18px 4px',
+                          wordBreak: 'break-word',
+                          border: isLight && !isOwnMessage ? `1px solid ${appTheme.palette.divider}` : 'none'
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ color: isOwnMessage ? '#ffffff' : (isLight ? textPrimary : '#ffffff') }}>
+                          {message.content}
+                        </Typography>
+                      </Paper>
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          mt: 0.5, 
+                          alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
+                          mr: isOwnMessage ? 1 : 0,
+                          ml: isOwnMessage ? 0 : 1,
+                          color: textSecondary
+                        }}
+                      >
+                        {message.timestamp && formatDateTimeLocal(message.timestamp)}
+                      </Typography>
+                    </Box>
+                    {isOwnMessage && (
+                      <Avatar sx={{ ml: 2, bgcolor: 'primary.main', flexShrink: 0 }} title={username || user?.name || user?.email}>
+                        {(username || user?.name || user?.username)?.charAt(0).toUpperCase()}
+                      </Avatar>
+                    )}
+                      </ListItem>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+              <div ref={messagesEndRef} />
+            </List>
+          </Paper>
+
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            style={{ marginTop: '1rem' }}
+          >
+            <Paper component="form" onSubmit={handleSendMessage} sx={{ p: 2, bgcolor: inputBg }}>
+            <Box display="flex" gap={1} alignItems="flex-end">
+              <TextField
+                color="primary"
+                fullWidth
+                variant="outlined"
+                placeholder="Message"
+                multiline
+                maxRows={4}
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '20px',
+                    bgcolor: inputFieldBg,
+                    color: textPrimary,
+                    '& fieldset': {
+                      border: `1px solid ${inputBorder}`
+                    },
+                    '&:hover fieldset': {
+                      border: `1px solid ${inputBorderHover}`
+                    },
+                    '&.Mui-focused fieldset': {
+                      border: `2px solid ${appTheme.palette.primary.main}`
+                    }
+                  },
+                  '& .MuiInputBase-input': {
+                    color: textPrimary,
+                    '&::placeholder': {
+                      color: textSecondary,
+                      opacity: 1
+                    }
+                  }
+                }}
+              />
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <Button
+                  type="submit"
+                  variant="contained"
+                  sx={{
+                    minWidth: '50px',
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    p: 0,
+                    bgcolor: newMessage.trim() ? appTheme.palette.primary.main : sendButtonDisabled,
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: newMessage.trim() ? appTheme.palette.primary.dark : sendButtonDisabled
+                    },
+                    '&:disabled': {
+                      bgcolor: sendButtonDisabled,
+                      color: isLight ? '#999999' : '#999999'
+                    }
+                  }}
+                  disabled={!newMessage.trim()}
+                >
+                  <SendIcon sx={{ color: 'rgba(255,255,255,0.92)' }} />
+                </Button>
+              </motion.div>
+            </Box>
+            </Paper>
+          </motion.div>
+        </Grid>
+
+        {/* User Profile Section - Right Side (30%) */}
+        <Grid item xs={12} sm={12} md={4} sx={{ display: { xs: 'none', md: 'flex' }, flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            style={{ height: '100%', overflow: 'auto' }}
+            className="chat-profile-scroll"
+          >
+            <Paper sx={{ p: 2, bgcolor: chatHeaderBg, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="h6" sx={{ mb: 2, color: textPrimary }}>
+                Your Profile
+              </Typography>
+
+              {/* Scrollable content wrapper */}
+              <Box sx={{ overflow: 'auto', flex: 1, minHeight: 0, pr: 1 }}>
+                <Box sx={{ textAlign: 'center', mb: 3 }}>
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.3 }}
                   >
-                    <Typography variant="body2" sx={{ color: isOwnMessage ? '#ffffff' : (isLight ? textPrimary : '#ffffff') }}>
-                      {message.content}
-                    </Typography>
-                  </Paper>
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      mt: 0.5, 
-                      alignSelf: isOwnMessage ? 'flex-end' : 'flex-start',
-                      mr: isOwnMessage ? 1 : 0,
-                      ml: isOwnMessage ? 0 : 1,
-                      color: textSecondary
-                    }}
-                  >
-                    {message.timestamp && formatDateTimeLocal(message.timestamp)}
+                    <Avatar 
+                      sx={{ 
+                        width: 80, 
+                        height: 80, 
+                        bgcolor: 'primary.main', 
+                        mx: 'auto',
+                        mb: 2,
+                        fontSize: '2rem'
+                      }}
+                    >
+                      {(username || user?.name || user?.username)?.charAt(0).toUpperCase()}
+                    </Avatar>
+                  </motion.div>
+                  <Typography variant="h6" sx={{ color: textPrimary, mb: 0.5 }}>
+                    {username || user?.name || user?.username || 'User'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: textSecondary }}>
+                    {user?.email}
                   </Typography>
                 </Box>
-                {isOwnMessage && (
-                  <Avatar sx={{ ml: 2, bgcolor: 'primary.main' }} title={username || user?.name || user?.email}>
-                    {(username || user?.name || user?.username)?.charAt(0).toUpperCase()}
-                  </Avatar>
-                )}
-                  </ListItem>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-          <div ref={messagesEndRef} />
-        </List>
-      </Paper>
 
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-      >
-        <Paper component="form" onSubmit={handleSendMessage} sx={{ p: 2, bgcolor: inputBg }}>
-        <Box display="flex" gap={1} alignItems="flex-end">
-          <TextField
-            color="primary"
-            fullWidth
-            variant="outlined"
-            placeholder="Message"
-            multiline
-            maxRows={4}
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage(e);
-              }
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '20px',
-                bgcolor: inputFieldBg,
-                color: textPrimary,
-                '& fieldset': {
-                  border: `1px solid ${inputBorder}`
-                },
-                '&:hover fieldset': {
-                  border: `1px solid ${inputBorderHover}`
-                },
-                '&.Mui-focused fieldset': {
-                  border: `2px solid ${appTheme.palette.primary.main}`
-                }
-              },
-              '& .MuiInputBase-input': {
-                color: textPrimary,
-                '&::placeholder': {
-                  color: textSecondary,
-                  opacity: 1
-                }
-              }
-            }}
-          />
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-          >
-            <Button
-              type="submit"
-              variant="contained"
-              sx={{
-                minWidth: '50px',
-                width: '50px',
-                height: '50px',
-                borderRadius: '50%',
-                p: 0,
-                bgcolor: newMessage.trim() ? appTheme.palette.primary.main : sendButtonDisabled,
-                color: 'white',
-                '&:hover': {
-                  bgcolor: newMessage.trim() ? appTheme.palette.primary.dark : sendButtonDisabled
-                },
-                '&:disabled': {
-                  bgcolor: sendButtonDisabled,
-                  color: isLight ? '#999999' : '#999999'
-                }
-              }}
-              disabled={!newMessage.trim()}
-            >
-              <SendIcon />
-            </Button>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: textSecondary, mb: 1 }}>
+                    Status
+                  </Typography>
+                  <Chip 
+                    icon={<CircleIcon />}
+                    label={isConnected ? 'Connected' : 'Disconnected'}
+                    color={isConnected ? 'success' : 'error'}
+                    size="small"
+                  />
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: textSecondary, mb: 1 }}>
+                    Room Members
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {chatRoom?.members?.map((member) => (
+                      <Box 
+                        key={member.id}
+                        sx={{ 
+                          p: 1, 
+                          bgcolor: inputFieldBg, 
+                          borderRadius: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1
+                        }}
+                      >
+                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                          {(member.displayName || member.username)?.charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" sx={{ color: textPrimary }}>
+                            {member.displayName || member.username}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: textSecondary }}>
+                            {member.id === user?.id ? '(You)' : '@' + member.username}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: textSecondary, mb: 1 }}>
+                    Chat Info
+                  </Typography>
+                  <Box sx={{ p: 1, bgcolor: inputFieldBg, borderRadius: 1 }}>
+                    <Typography variant="caption" sx={{ color: textPrimary, display: 'block', mb: 0.5 }}>
+                      <strong>Room:</strong> {chatRoom?.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: textPrimary, display: 'block', mb: 0.5 }}>
+                      <strong>Type:</strong> {chatRoom?.roomType}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: textPrimary, display: 'block' }}>
+                      <strong>Messages:</strong> {messages.length}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Paper>
           </motion.div>
-        </Box>
-        </Paper>
-      </motion.div>
+        </Grid>
+      </Grid>
 
       {/* Screen Share Dialog */}
       <Dialog 
