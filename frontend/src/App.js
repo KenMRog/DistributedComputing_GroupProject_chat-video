@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box, Typography, AppBar, Toolbar, IconButton } from '@mui/material';
-import { Logout as LogoutIcon, Person as PersonIcon, LightMode as LightModeIcon, DarkMode as DarkModeIcon } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Box, Typography, Button, AppBar, Toolbar, IconButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Logout as LogoutIcon, Person as PersonIcon, Info as InfoIcon, LightMode as LightModeIcon, DarkMode as DarkModeIcon } from '@mui/icons-material';
 import ChatSidebar from './components/ChatSidebar';
 import ChatMain from './components/ChatMain';
 import AuthGuard from './components/AuthGuard';
@@ -11,20 +11,38 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import logoNoText from './static/logonotext.png';
 import './App.css';
+import About from './components/About';
 
 function AppContent() {
   const [selectedChat, setSelectedChat] = useState(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const { user, logout } = useAuth();
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+
   const { mode, toggleTheme } = useTheme();
 
   const handleLogout = () => {
+    
+    // open confirmation dialog instead of logging out immediately
+    setLogoutConfirmOpen(true);
+  };
+
+  const confirmLogout = () => {
+    setLogoutConfirmOpen(false);
     setSelectedChat(null); // Clear selected chat before logout
     logout();
+  };
+
+  const cancelLogout = () => {
+    setLogoutConfirmOpen(false);
   };
 
   const handleChatSelect = (chat) => {
     setSelectedChat(chat);
   };
+
+  const handleOpenAbout = () => setAboutOpen(true);
+  const handleCloseAbout = () => setAboutOpen(false);
 
   return (
     <motion.div
@@ -82,6 +100,7 @@ function AppContent() {
                 </Typography>
               </motion.div>
             </Box>
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <PersonIcon color="primary" />
@@ -89,27 +108,23 @@ function AppContent() {
                   {user?.name || user?.email}
                 </Typography>
               </Box>
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <IconButton 
-                  onClick={toggleTheme} 
-                  color="primary" 
+
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                <IconButton
+                  onClick={toggleTheme}
+                  color="primary"
                   title={mode === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                 >
                   {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
                 </IconButton>
               </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <IconButton 
-                  onClick={handleLogout} 
-                  color="primary" 
-                  title="Logout"
-                >
+
+              <IconButton onClick={handleOpenAbout} color="primary" title="About">
+                <InfoIcon />
+              </IconButton>
+
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                <IconButton onClick={handleLogout} color="primary" title="Logout">
                   <LogoutIcon />
                 </IconButton>
               </motion.div>
@@ -117,7 +132,7 @@ function AppContent() {
           </Toolbar>
         </AppBar>
       </Box>
-      
+
       <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex' }}>
         <ChatSidebar 
           selectedChatId={selectedChat?.id} 
@@ -127,6 +142,18 @@ function AppContent() {
           <ChatMain key={selectedChat?.id || 'empty'} selectedChat={selectedChat} user={user} />
         </AnimatePresence>
       </Box>
+      <About open={aboutOpen} onClose={handleCloseAbout} />
+
+      <Dialog open={logoutConfirmOpen} onClose={cancelLogout}>
+        <DialogTitle>Confirm Logout</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to log out?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelLogout}>Cancel</Button>
+          <Button onClick={confirmLogout} color="primary" variant="contained">Logout</Button>
+        </DialogActions>
+      </Dialog>
     </motion.div>
   );
 }

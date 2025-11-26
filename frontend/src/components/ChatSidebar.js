@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { formatTime, formatDateShort, formatWeekday } from '../utils/timeUtils';
 
 const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const [chats, setChats] = useState([]);
@@ -214,12 +215,13 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     const now = new Date();
     const diffInHours = (now - date) / (1000 * 60 * 60);
     
+    // For events within the last day show time with user's timezone
     if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return formatTime(lastActivity);
     } else if (diffInHours < 168) { // 7 days
-      return date.toLocaleDateString([], { weekday: 'short' });
+      return formatWeekday(lastActivity);
     } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return formatDateShort(lastActivity);
     }
   };
 
