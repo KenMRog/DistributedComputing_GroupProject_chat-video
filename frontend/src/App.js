@@ -119,9 +119,18 @@ function AppContent() {
                 </IconButton>
               </motion.div>
 
-              <IconButton onClick={handleOpenAbout} color="primary" title="About">
-                <InfoIcon />
-              </IconButton>
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                <IconButton
+                  onClick={handleOpenAbout}
+                  color="primary"
+                  title="About"
+                  aria-label="About"
+                  sx={{ color: 'primary.main' }}
+                  size="large"
+                >
+                  <InfoIcon />
+                </IconButton>
+              </motion.div>
 
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                 <IconButton onClick={handleLogout} color="primary" title="Logout">
