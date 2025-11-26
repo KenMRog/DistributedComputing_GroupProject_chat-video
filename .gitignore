@@ -22,6 +22,9 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
+# Local application configuration (contains sensitive Azure credentials)
+backend/src/main/resources/application-local.yml
+
 # Logs
 logs/
 *.log

@@ -1,0 +1,48 @@
+# Integration Test Configuration for Azure Resources
+# 
+# This configuration is used when running integration tests against real Azure services.
+# 
+# To use this configuration:
+# 1. Copy this file and fill in your actual Azure credentials
+# 2. Run tests with: mvn test -Dgroups=integration -Dspring.profiles.active=integration-test
+# 
+# IMPORTANT: Never commit actual credentials to version control!
+# Use environment variables instead for CI/CD pipelines.
+
+spring:
+  application:
+    name: screenshare-backend-integration-test
+
+azure:
+  service-bus:
+    # Get from: Azure Portal > Service Bus Namespace > Shared access policies > RootManageSharedAccessKey
+    connection-string: ${AZURE_SERVICE_BUS_CONNECTION_STRING:}
+    queue-name: ${AZURE_SERVICE_BUS_QUEUE_NAME:test-notifications-queue}
+    topic-name: ${AZURE_SERVICE_BUS_TOPIC_NAME:test-notifications-topic}
+    subscription-name: ${AZURE_SERVICE_BUS_SUBSCRIPTION_NAME:test-subscription}
+
+  event-grid:
+    # Domain configuration
+    # Get from: Azure Portal > Event Grid Domain > Access keys
+    domain-endpoint: ${AZURE_EVENT_GRID_DOMAIN_ENDPOINT:}
+    domain-key: ${AZURE_EVENT_GRID_DOMAIN_KEY:}
+    
+    # Topic configuration  
+    # Get from: Azure Portal > Event Grid Topic > Access keys
+    topic-endpoint: ${AZURE_EVENT_GRID_TOPIC_ENDPOINT:}
+    topic-key: ${AZURE_EVENT_GRID_TOPIC_KEY:}
+
+# Example of how to set environment variables:
+#
+# Windows PowerShell:
+#   $env:AZURE_SERVICE_BUS_CONNECTION_STRING="Endpoint=sb://your-namespace.servicebus.windows.net/;..."
+#   $env:AZURE_EVENT_GRID_DOMAIN_ENDPOINT="https://your-domain.eastus-1.eventgrid.azure.net/api/events"
+#   $env:AZURE_EVENT_GRID_DOMAIN_KEY="your-key-here"
+#
+# Linux/Mac:
+#   export AZURE_SERVICE_BUS_CONNECTION_STRING="Endpoint=sb://your-namespace.servicebus.windows.net/;..."
+#   export AZURE_EVENT_GRID_DOMAIN_ENDPOINT="https://your-domain.eastus-1.eventgrid.azure.net/api/events"
+#   export AZURE_EVENT_GRID_DOMAIN_KEY="your-key-here"
+#
+# Then run:
+#   mvn test -Dgroups=integration

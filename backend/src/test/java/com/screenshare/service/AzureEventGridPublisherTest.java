@@ -3,7 +3,9 @@ package com.screenshare.service;
 import com.azure.messaging.eventgrid.EventGridEvent;
 import com.azure.messaging.eventgrid.EventGridPublisherClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.screenshare.model.ChatEvent;
 import com.screenshare.model.HelloWorldEvent;
+import com.screenshare.model.ScreenShareEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -193,5 +195,309 @@ class AzureEventGridPublisherTest {
 
         // Assert
         verify(publisherClient, times(2)).sendEvents(anyList());
+    }
+
+    // ========== Chat Event Tests ==========
+
+    @Test
+    void testPublishChatEvent_Success() {
+        // Arrange
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        data.setRoomId(123L);
+        data.setUserId(456L);
+        data.setUsername("TestUser");
+        data.setMessageId(789L);
+        data.setMessageContent("Hello World");
+        
+        ChatEvent chatEvent = new ChatEvent("chat/room/123", ChatEvent.MESSAGE_SENT, data);
+        
+        // Act
+        publisher.publishChatEvent(chatEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient, times(1)).sendEvents(eventCaptor.capture());
+        
+        List<EventGridEvent> events = eventCaptor.getValue();
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        
+        EventGridEvent event = events.get(0);
+        assertEquals(ChatEvent.MESSAGE_SENT, event.getEventType());
+        assertEquals("chat/room/123", event.getSubject());
+        assertNotNull(event.getData());
+    }
+
+    @Test
+    void testPublishChatEvent_NullClient() {
+        // Arrange
+        when(topicPublisherClientProvider.getIfAvailable()).thenReturn(topicPublisherClient);
+        AzureEventGridPublisher publisherWithNullClient = new AzureEventGridPublisher(
+                null, topicPublisherClientProvider, objectMapper);
+        
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        data.setRoomId(123L);
+        ChatEvent chatEvent = new ChatEvent("chat/room/123", ChatEvent.MESSAGE_SENT, data);
+        
+        // Act - Should not throw exception, just log warning
+        assertDoesNotThrow(() -> publisherWithNullClient.publishChatEvent(chatEvent));
+        
+        // Assert - No event should be published
+        verify(publisherClient, never()).sendEvents(anyList());
+    }
+
+    @Test
+    void testPublishChatEventToTopic_Success() {
+        // Arrange
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        data.setRoomId(999L);
+        data.setUserId(111L);
+        data.setUsername("JoinedUser");
+        
+        ChatEvent chatEvent = new ChatEvent("chat/room/999", ChatEvent.USER_JOINED_ROOM, data);
+        
+        // Act
+        publisher.publishChatEventToTopic(chatEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(topicPublisherClient, times(1)).sendEvents(eventCaptor.capture());
+        
+        List<EventGridEvent> events = eventCaptor.getValue();
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        
+        EventGridEvent event = events.get(0);
+        assertEquals(ChatEvent.USER_JOINED_ROOM, event.getEventType());
+        assertEquals("chat/room/999", event.getSubject());
+    }
+
+    @Test
+    void testPublishChatEventToTopic_NullClient() {
+        // Arrange
+        when(topicPublisherClientProvider.getIfAvailable()).thenReturn(null);
+        AzureEventGridPublisher publisherWithNullTopicClient = new AzureEventGridPublisher(
+                publisherClient, topicPublisherClientProvider, objectMapper);
+        
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        ChatEvent chatEvent = new ChatEvent("chat/room/123", ChatEvent.MESSAGE_SENT, data);
+        
+        // Act - Should not throw exception, just log warning
+        assertDoesNotThrow(() -> publisherWithNullTopicClient.publishChatEventToTopic(chatEvent));
+        
+        // Assert - No event should be published
+        verify(topicPublisherClient, never()).sendEvents(anyList());
+    }
+
+    @Test
+    void testPublishChatEvent_InviteSent() {
+        // Arrange
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        data.setUserId(100L);
+        data.setInvitedUserId(200L);
+        data.setInviteId(300L);
+        data.setRoomId(400L);
+        
+        ChatEvent chatEvent = new ChatEvent("chat/invite/300", ChatEvent.INVITE_SENT, data);
+        
+        // Act
+        publisher.publishChatEvent(chatEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient).sendEvents(eventCaptor.capture());
+        
+        EventGridEvent event = eventCaptor.getValue().get(0);
+        assertEquals(ChatEvent.INVITE_SENT, event.getEventType());
+        assertEquals("chat/invite/300", event.getSubject());
+    }
+
+    // ========== Screen Share Event Tests ==========
+
+    @Test
+    void testPublishScreenShareEvent_Success() {
+        // Arrange
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        data.setSessionId("session-123");
+        data.setHostUserId(456L);
+        data.setHostUsername("HostUser");
+        data.setRoomId(789L);
+        data.setParticipantCount(1);
+        data.setSessionStatus("ACTIVE");
+        
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/session-123", 
+                ScreenShareEvent.SESSION_STARTED, 
+                data);
+        
+        // Act
+        publisher.publishScreenShareEvent(shareEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient, times(1)).sendEvents(eventCaptor.capture());
+        
+        List<EventGridEvent> events = eventCaptor.getValue();
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        
+        EventGridEvent event = events.get(0);
+        assertEquals(ScreenShareEvent.SESSION_STARTED, event.getEventType());
+        assertEquals("screenshare/session/session-123", event.getSubject());
+        assertNotNull(event.getData());
+    }
+
+    @Test
+    void testPublishScreenShareEvent_NullClient() {
+        // Arrange
+        when(topicPublisherClientProvider.getIfAvailable()).thenReturn(topicPublisherClient);
+        AzureEventGridPublisher publisherWithNullClient = new AzureEventGridPublisher(
+                null, topicPublisherClientProvider, objectMapper);
+        
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        data.setSessionId("session-456");
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/session-456", 
+                ScreenShareEvent.SESSION_STARTED, 
+                data);
+        
+        // Act - Should not throw exception, just log warning
+        assertDoesNotThrow(() -> publisherWithNullClient.publishScreenShareEvent(shareEvent));
+        
+        // Assert - No event should be published
+        verify(publisherClient, never()).sendEvents(anyList());
+    }
+
+    @Test
+    void testPublishScreenShareEventToTopic_Success() {
+        // Arrange
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        data.setSessionId("session-789");
+        data.setParticipantUserId(111L);
+        data.setParticipantUsername("Participant1");
+        data.setParticipantCount(3);
+        
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/session-789", 
+                ScreenShareEvent.PARTICIPANT_JOINED, 
+                data);
+        
+        // Act
+        publisher.publishScreenShareEventToTopic(shareEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(topicPublisherClient, times(1)).sendEvents(eventCaptor.capture());
+        
+        List<EventGridEvent> events = eventCaptor.getValue();
+        assertNotNull(events);
+        assertEquals(1, events.size());
+        
+        EventGridEvent event = events.get(0);
+        assertEquals(ScreenShareEvent.PARTICIPANT_JOINED, event.getEventType());
+        assertEquals("screenshare/session/session-789", event.getSubject());
+    }
+
+    @Test
+    void testPublishScreenShareEventToTopic_NullClient() {
+        // Arrange
+        when(topicPublisherClientProvider.getIfAvailable()).thenReturn(null);
+        AzureEventGridPublisher publisherWithNullTopicClient = new AzureEventGridPublisher(
+                publisherClient, topicPublisherClientProvider, objectMapper);
+        
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/test", 
+                ScreenShareEvent.SESSION_STARTED, 
+                data);
+        
+        // Act - Should not throw exception, just log warning
+        assertDoesNotThrow(() -> publisherWithNullTopicClient.publishScreenShareEventToTopic(shareEvent));
+        
+        // Assert - No event should be published
+        verify(topicPublisherClient, never()).sendEvents(anyList());
+    }
+
+    @Test
+    void testPublishScreenShareEvent_SessionEnded() {
+        // Arrange
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        data.setSessionId("ending-session");
+        data.setHostUserId(999L);
+        data.setSessionStatus("COMPLETED");
+        data.setParticipantCount(0);
+        
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/ending-session", 
+                ScreenShareEvent.SESSION_ENDED, 
+                data);
+        
+        // Act
+        publisher.publishScreenShareEvent(shareEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient).sendEvents(eventCaptor.capture());
+        
+        EventGridEvent event = eventCaptor.getValue().get(0);
+        assertEquals(ScreenShareEvent.SESSION_ENDED, event.getEventType());
+        assertEquals("screenshare/session/ending-session", event.getSubject());
+    }
+
+    @Test
+    void testChatEventStructure() {
+        // Arrange
+        ChatEvent.ChatEventData data = new ChatEvent.ChatEventData();
+        data.setRoomId(555L);
+        data.setMessageId(666L);
+        data.setMessageContent("Test message content");
+        
+        ChatEvent chatEvent = new ChatEvent("chat/room/555", ChatEvent.MESSAGE_SENT, data);
+        
+        // Act
+        publisher.publishChatEvent(chatEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient).sendEvents(eventCaptor.capture());
+        
+        EventGridEvent event = eventCaptor.getValue().get(0);
+        
+        // Verify all required fields
+        assertNotNull(event.getId());
+        assertNotNull(event.getEventType());
+        assertNotNull(event.getSubject());
+        assertNotNull(event.getEventTime());
+        assertNotNull(event.getData());
+    }
+
+    @Test
+    void testScreenShareEventStructure() {
+        // Arrange
+        ScreenShareEvent.ScreenShareEventData data = new ScreenShareEvent.ScreenShareEventData();
+        data.setSessionId("struct-test-session");
+        data.setResolution("1920x1080");
+        data.setFrameRate(30);
+        
+        ScreenShareEvent shareEvent = new ScreenShareEvent(
+                "screenshare/session/struct-test-session", 
+                ScreenShareEvent.QUALITY_CHANGED, 
+                data);
+        
+        // Act
+        publisher.publishScreenShareEvent(shareEvent);
+        
+        // Assert
+        ArgumentCaptor<List<EventGridEvent>> eventCaptor = ArgumentCaptor.forClass(List.class);
+        verify(publisherClient).sendEvents(eventCaptor.capture());
+        
+        EventGridEvent event = eventCaptor.getValue().get(0);
+        
+        // Verify all required fields
+        assertNotNull(event.getId());
+        assertEquals(ScreenShareEvent.QUALITY_CHANGED, event.getEventType());
+        assertEquals("screenshare/session/struct-test-session", event.getSubject());
+        assertNotNull(event.getEventTime());
+        assertNotNull(event.getData());
     }
 }

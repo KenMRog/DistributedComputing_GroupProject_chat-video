@@ -193,4 +193,212 @@ class AzureEventGridSubscriberTest {
         assertNotNull(response);
         assertTrue(response.contains("validationResponse"));
     }
+
+    // ========== Chat Event Handling Tests ==========
+
+    @Test
+    void testHandleEvent_ChatMessageSent() {
+        // Arrange
+        String chatData = "{\"roomId\":123,\"userId\":456,\"username\":\"TestUser\",\"messageId\":789,\"messageContent\":\"Hello\"}";
+        EventGridEvent event = new EventGridEvent(
+                "chat/room/123",
+                "chat.message.sent",
+                BinaryData.fromString(chatData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ChatUserJoined() {
+        // Arrange
+        String chatData = "{\"roomId\":999,\"userId\":111,\"username\":\"NewUser\"}";
+        EventGridEvent event = new EventGridEvent(
+                "chat/room/999",
+                "chat.user.joined",
+                BinaryData.fromString(chatData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ChatInviteSent() {
+        // Arrange
+        String chatData = "{\"userId\":100,\"invitedUserId\":200,\"inviteId\":300,\"roomId\":400}";
+        EventGridEvent event = new EventGridEvent(
+                "chat/invite/300",
+                "chat.invite.sent",
+                BinaryData.fromString(chatData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ChatInviteAccepted() {
+        // Arrange
+        String chatData = "{\"inviteId\":500,\"username\":\"AcceptedUser\"}";
+        EventGridEvent event = new EventGridEvent(
+                "chat/invite/500",
+                "chat.invite.accepted",
+                BinaryData.fromString(chatData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    // ========== Screen Share Event Handling Tests ==========
+
+    @Test
+    void testHandleEvent_ScreenShareSessionStarted() {
+        // Arrange
+        String shareData = "{\"sessionId\":\"session-123\",\"hostUserId\":456,\"hostUsername\":\"HostUser\",\"roomId\":789,\"participantCount\":1,\"sessionStatus\":\"ACTIVE\"}";
+        EventGridEvent event = new EventGridEvent(
+                "screenshare/session/session-123",
+                "screenshare.session.started",
+                BinaryData.fromString(shareData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ScreenShareSessionEnded() {
+        // Arrange
+        String shareData = "{\"sessionId\":\"session-456\",\"sessionStatus\":\"COMPLETED\"}";
+        EventGridEvent event = new EventGridEvent(
+                "screenshare/session/session-456",
+                "screenshare.session.ended",
+                BinaryData.fromString(shareData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ScreenShareParticipantJoined() {
+        // Arrange
+        String shareData = "{\"sessionId\":\"session-789\",\"participantUserId\":111,\"participantUsername\":\"Participant1\",\"participantCount\":3}";
+        EventGridEvent event = new EventGridEvent(
+                "screenshare/session/session-789",
+                "screenshare.participant.joined",
+                BinaryData.fromString(shareData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_ScreenShareParticipantLeft() {
+        // Arrange
+        String shareData = "{\"sessionId\":\"session-999\",\"participantUserId\":222,\"participantUsername\":\"Participant2\",\"participantCount\":2}";
+        EventGridEvent event = new EventGridEvent(
+                "screenshare/session/session-999",
+                "screenshare.participant.left",
+                BinaryData.fromString(shareData),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should not throw exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvents_MixedEventTypes() {
+        // Arrange
+        EventGridEvent chatEvent = new EventGridEvent(
+                "chat/room/1",
+                "chat.message.sent",
+                BinaryData.fromString("{\"roomId\":1,\"messageContent\":\"Hello\"}"),
+                "1.0"
+        );
+        chatEvent.setId(UUID.randomUUID().toString());
+        chatEvent.setEventTime(OffsetDateTime.now());
+
+        EventGridEvent shareEvent = new EventGridEvent(
+                "screenshare/session/s1",
+                "screenshare.session.started",
+                BinaryData.fromString("{\"sessionId\":\"s1\"}"),
+                "1.0"
+        );
+        shareEvent.setId(UUID.randomUUID().toString());
+        shareEvent.setEventTime(OffsetDateTime.now());
+
+        EventGridEvent helloEvent = new EventGridEvent(
+                "/test/hello",
+                "HelloWorld.Test",
+                BinaryData.fromString("{\"message\":\"test\"}"),
+                "1.0"
+        );
+        helloEvent.setId(UUID.randomUUID().toString());
+        helloEvent.setEventTime(OffsetDateTime.now());
+
+        List<EventGridEvent> events = Arrays.asList(chatEvent, shareEvent, helloEvent);
+
+        // Act & Assert - Should handle all events without exception
+        assertDoesNotThrow(() -> subscriber.handleEvents(events));
+    }
+
+    @Test
+    void testHandleEvent_UnhandledChatEventType() {
+        // Arrange
+        EventGridEvent event = new EventGridEvent(
+                "chat/room/1",
+                "chat.unknown.type",
+                BinaryData.fromString("{\"data\":\"test\"}"),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should handle gracefully without exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
+
+    @Test
+    void testHandleEvent_UnhandledScreenShareEventType() {
+        // Arrange
+        EventGridEvent event = new EventGridEvent(
+                "screenshare/session/1",
+                "screenshare.unknown.type",
+                BinaryData.fromString("{\"data\":\"test\"}"),
+                "1.0"
+        );
+        event.setId(UUID.randomUUID().toString());
+        event.setEventTime(OffsetDateTime.now());
+
+        // Act & Assert - Should handle gracefully without exception
+        assertDoesNotThrow(() -> subscriber.handleEvent(event));
+    }
 }
