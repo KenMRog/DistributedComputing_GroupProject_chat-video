@@ -27,19 +27,37 @@ const ScreenShareView = ({
   // Set first share as selected by default
   useEffect(() => {
     if (activeShares.length > 0 && !selectedShareId) {
-      setSelectedShareId(activeShares[0].userId);
+      // Prefer selecting the current user's share if they're sharing
+      const ownShare = activeShares.find(s => s.userId === currentUser?.id);
+      setSelectedShareId(ownShare ? ownShare.userId : activeShares[0].userId);
     }
-  }, [activeShares, selectedShareId]);
+  }, [activeShares, selectedShareId, currentUser?.id]);
 
   // Update main video when selection changes
   useEffect(() => {
     if (mainVideoRef.current && selectedShareId) {
       const selectedShare = activeShares.find(s => s.userId === selectedShareId);
-      if (selectedShare && selectedShare.stream) {
-        mainVideoRef.current.srcObject = selectedShare.stream;
+      let streamToUse = null;
+      
+      // If it's the current user's share, use localStream if available
+      if (selectedShareId === currentUser?.id && localStream) {
+        streamToUse = localStream;
+      } else if (selectedShare && selectedShare.stream) {
+        streamToUse = selectedShare.stream;
+      }
+      
+      if (streamToUse) {
+        mainVideoRef.current.srcObject = streamToUse;
+        // Ensure video plays
+        mainVideoRef.current.play().catch(err => {
+          console.error('Error playing video:', err);
+        });
+      } else if (mainVideoRef.current) {
+        // Clear video if stream is not available
+        mainVideoRef.current.srcObject = null;
       }
     }
-  }, [selectedShareId, activeShares]);
+  }, [selectedShareId, activeShares, localStream, currentUser?.id]);
 
   // Update thumbnail videos
   useEffect(() => {
@@ -98,16 +116,42 @@ const ScreenShareView = ({
         >
           {selectedShare ? (
             <>
-              <video
-                ref={mainVideoRef}
-                autoPlay
-                playsInline
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
+              {(selectedShare.stream || (selectedShare.userId === currentUser?.id && localStream)) ? (
+                <video
+                  ref={(el) => {
+                    mainVideoRef.current = el;
+                    if (el && selectedShareId) {
+                      const share = activeShares.find(s => s.userId === selectedShareId);
+                      let streamToUse = null;
+                      if (selectedShareId === currentUser?.id && localStream) {
+                        streamToUse = localStream;
+                      } else if (share && share.stream) {
+                        streamToUse = share.stream;
+                      }
+                      if (streamToUse) {
+                        el.srcObject = streamToUse;
+                        el.play().catch(err => console.error('Error playing video:', err));
+                      }
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                  muted={selectedShare.userId === currentUser?.id}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    backgroundColor: '#000',
+                  }}
+                />
+              ) : (
+                <Box sx={{ textAlign: 'center', color: 'white', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <PersonIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5 }} />
+                  <Typography variant="body1" sx={{ opacity: 0.7 }}>
+                    Connecting to {selectedShare.username || selectedShare.displayName || `User ${selectedShare.userId}`}...
+                  </Typography>
+                </Box>
+              )}
               {/* User label overlay */}
               <Box
                 sx={{
@@ -132,6 +176,9 @@ const ScreenShareView = ({
                 </Typography>
                 {selectedShare.userId === currentUser?.id && (
                   <Chip label="You" size="small" color="primary" sx={{ ml: 1 }} />
+                )}
+                {!selectedShare.stream && !(selectedShare.userId === currentUser?.id && localStream) && (
+                  <Chip label="Connecting..." size="small" color="warning" sx={{ ml: 1 }} />
                 )}
               </Box>
             </>
