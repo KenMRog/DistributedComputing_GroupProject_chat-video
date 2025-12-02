@@ -5,8 +5,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #14161a;
-  color: #ffffff;
+  /* Background and text colors are handled by Material-UI's CssBaseline based on theme */
 }
 
 code {
