@@ -33,6 +33,7 @@ import {
   Notifications as NotificationsIcon,
   Mail as MailIcon,
 } from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { formatTime, formatDateShort, formatWeekday } from '../utils/timeUtils';
 
@@ -56,6 +57,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
 
   // Fetch user's chat rooms
   const fetchChatRooms = async () => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/rooms?userId=${user.id}`);
       if (response.ok) {
@@ -69,6 +71,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
 
   // Fetch pending invites
   const fetchPendingInvites = async () => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invites/pending?userId=${user.id}`);
       if (response.ok) {
@@ -96,15 +99,21 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       fetchChatRooms();
       fetchPendingInvites();
       fetchAllUsers();
+    } else {
+      // Clear data when user logs out
+      setChats([]);
+      setPendingInvites([]);
+      setAllUsers([]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   // Fetch users for new DM invite search (top 5 match)
   const fetchUsersForInvite = async (q) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const base = `http://localhost:8080/api/users`;
       const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}` : `${base}?excludeActiveDmWith=${user.id}`;
@@ -130,7 +139,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   }, [inviteSearchTerm, newChatDialogOpen]);
 
   const handleNewChat = async () => {
-    if (!selectedUserId) return;
+    if (!selectedUserId || !user?.id) return;
 
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite?inviterId=${user.id}`, {
@@ -157,6 +166,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   const handleAcceptInvite = async (inviteId) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/accept?userId=${user.id}`, {
         method: 'POST',
@@ -173,6 +183,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   const handleDeclineInvite = async (inviteId) => {
+    if (!user?.id) return; // Early return if user is null
     try {
       const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/decline?userId=${user.id}`, {
         method: 'POST',
@@ -192,7 +203,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   );
 
   const getOtherUser = (chat) => {
-    if (chat.members && chat.members.length === 2) {
+    if (chat.members && chat.members.length === 2 && user?.id) {
       return chat.members.find(member => member.id !== user.id);
     }
     return null;
@@ -215,110 +226,163 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   };
 
   return (
-    <Box sx={{ width: 300, height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
-      {/* Header */}
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6" component="h1">
-            Chats
-          </Typography>
-          <Box>
-            <IconButton onClick={() => setInboxOpen(true)} color="primary" sx={{ mr: 1 }} title="Inbox">
-              <Badge badgeContent={pendingInvites.length} color="error">
-                <MailIcon />
-              </Badge>
-            </IconButton>
-            <IconButton onClick={() => setNewRoomDialogOpen(true)} color="primary" sx={{ mr: 1 }} title="Create Room">
-              <GroupAddIcon />
-            </IconButton>
-            <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary" title="New DM">
-              <AddIcon />
-            </IconButton>
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{ width: 300, height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
+      <Box sx={{ width: 300, height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
+        {/* Header */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+            >
+              <Typography variant="h6" component="h1">
+                Chats
+              </Typography>
+            </motion.div>
+            <Box>
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                style={{ display: 'inline-block' }}
+              >
+                <IconButton onClick={() => setInboxOpen(true)} color="primary" sx={{ mr: 1 }} title="Inbox">
+                  <Badge badgeContent={pendingInvites.length} color="error">
+                    <MailIcon />
+                  </Badge>
+                </IconButton>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                style={{ display: 'inline-block' }}
+              >
+                <IconButton onClick={() => setNewRoomDialogOpen(true)} color="primary" sx={{ mr: 1 }} title="Create Room">
+                  <GroupAddIcon />
+                </IconButton>
+              </motion.div>
+              <motion.div
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                style={{ display: 'inline-block' }}
+              >
+                <IconButton onClick={() => setNewChatDialogOpen(true)} color="primary" title="New DM">
+                  <AddIcon />
+                </IconButton>
+              </motion.div>
+            </Box>
           </Box>
+          
+          {/* Search */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Find chats"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </motion.div>
         </Box>
-        
-        {/* Search */}
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Find chats"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
 
       {/* pending invites are shown via badge on the Inbox icon */}
 
       {/* Chat List */}
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
         <List>
-          {filteredChats.map((chat) => {
-            const otherUser = getOtherUser(chat);
-            const isSelected = selectedChatId === chat.id;
-            
-            return (
-              <ListItem key={chat.id} disablePadding>
-                <ListItemButton
-                  selected={isSelected}
-                  onClick={() => onChatSelect(chat)}
-                  sx={{
-                    '&.Mui-selected': {
-                      bgcolor: 'primary.main',
-                      color: 'primary.contrastText',
-                      '&:hover': {
-                        bgcolor: 'primary.dark',
-                      },
-                    },
-                  }}
+          <AnimatePresence>
+            {filteredChats.map((chat, index) => {
+              const otherUser = getOtherUser(chat);
+              const isSelected = selectedChatId === chat.id;
+              
+              return (
+                <motion.div
+                  key={chat.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20, height: 0 }}
+                  transition={{ duration: 0.2, delay: index * 0.03 }}
+                  layout
                 >
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                      {otherUser ? (otherUser.displayName || otherUser.username).charAt(0).toUpperCase() : <PersonIcon />}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box component="span" sx={{ fontWeight: 500 }}>{otherUser ? (otherUser.displayName || otherUser.username) : chat.name}</Box>
-                        {(chat.roomType === 'PRIVATE' || chat.roomType === 'PUBLIC') && (
-                          <Chip
-                            size="small"
-                            label={chat.roomType === 'PRIVATE' ? 'Private' : 'Public'}
-                            variant="outlined"
-                            color={chat.roomType === 'PRIVATE' ? 'default' : 'primary'}
-                          />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatLastActivity(chat.lastActivityAt)}
-                        </Typography>
-                        {chat.description && (
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            noWrap
-                            sx={{ mt: 0.5 }}
-                          >
-                            {chat.description.length > 90 ? chat.description.slice(0, 90) + '…' : chat.description}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
-            );
-          })}
+                  <ListItem disablePadding>
+                    <motion.div
+                      whileHover={{ x: 4 }}
+                      whileTap={{ scale: 0.98 }}
+                      style={{ width: '100%' }}
+                    >
+                      <ListItemButton
+                        selected={isSelected}
+                        onClick={() => onChatSelect(chat)}
+                        sx={{
+                          '&.Mui-selected': {
+                            bgcolor: 'primary.main',
+                            color: 'primary.contrastText',
+                            '&:hover': {
+                              bgcolor: 'primary.dark',
+                            },
+                          },
+                        }}
+                      >
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'primary.main' }}>
+                          {otherUser ? (otherUser.displayName || otherUser.username).charAt(0).toUpperCase() : <PersonIcon />}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box component="span" sx={{ fontWeight: 500 }}>{otherUser ? (otherUser.displayName || otherUser.username) : chat.name}</Box>
+                            {(chat.roomType === 'PRIVATE' || chat.roomType === 'PUBLIC') && (
+                              <Chip
+                                size="small"
+                                label={chat.roomType === 'PRIVATE' ? 'Private' : 'Public'}
+                                variant="outlined"
+                                color={chat.roomType === 'PRIVATE' ? 'default' : 'primary'}
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatLastActivity(chat.lastActivityAt)}
+                            </Typography>
+                            {chat.description && (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                noWrap
+                                sx={{ mt: 0.5 }}
+                              >
+                                {chat.description.length > 90 ? chat.description.slice(0, 90) + '…' : chat.description}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                      </ListItemButton>
+                    </motion.div>
+                  </ListItem>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </List>
       </Box>
 
@@ -411,6 +475,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           <Button onClick={() => setNewRoomDialogOpen(false)}>Cancel</Button>
           <Button onClick={async () => {
             // Create room via backend
+            if (!user?.id) return; // Early return if user is null
             try {
               const payload = {
                 name: newRoomName,
@@ -437,7 +502,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
             } catch (err) {
               console.error('Error creating room', err);
             }
-          }} variant="contained" disabled={!newRoomName || !newRoomDescription.trim()}>
+          }} variant="contained" disabled={!newRoomName || !newRoomDescription.trim() || !user?.id}>
             Create
           </Button>
         </DialogActions>
@@ -476,7 +541,8 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
           <Button onClick={() => setInboxOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+      </Box>
+    </motion.div>
   );
 };
 
