@@ -17,7 +17,7 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socketUrl = 'http://localhost:8080/api/ws';
+    const socketUrl = 'http://localhost:8080/ws';
 
     // Create a new STOMP client
     const client = new Client({
