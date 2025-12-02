@@ -17,7 +17,7 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socketUrl = 'http://localhost:8080/ws';
+    const socketUrl = 'http://localhost:8080/api/ws';
     
     // Get username from localStorage
     const savedUser = localStorage.getItem('user');

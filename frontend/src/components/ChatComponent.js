@@ -59,9 +59,11 @@ const ChatComponent = ({ chatRoom }) => {
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
 
   const username = user?.username || user?.name || 'Anonymous';
-  const chatTopic = `/topic/chat/${chatRoom.id}`;
-  const signalTopic = `/topic/signal/${chatRoom.id}`;
-  const screenshareTopic = `/topic/screenshare/${chatRoom.id}`; // Room-specific screen share topic
+  
+  // Create topics based on current chat room - these will update when chatRoom.id changes
+  const chatTopic = chatRoom?.id ? `/topic/chat/${chatRoom.id}` : null;
+  const signalTopic = chatRoom?.id ? `/topic/signal/${chatRoom.id}` : null;
+  const screenshareTopic = chatRoom?.id ? `/topic/screenshare/${chatRoom.id}` : null; // Room-specific screen share topic
 
   // Scroll to bottom of chat
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -92,19 +94,24 @@ const ChatComponent = ({ chatRoom }) => {
 
   // Subscribe to chat and screen share notifications
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || !subscribe || !chatRoom?.id || !chatTopic) return;
 
     const subs = [];
-    subs.push(
-      subscribe(chatTopic, (msg) => {
+    
+    // Subscribe to chat messages
+    const chatSub = subscribe(chatTopic, (msg) => {
+      try {
         const received = JSON.parse(msg.body);
         setMessages((prev) => [...prev, received]);
-      })
-    );
+      } catch (err) {
+        console.error('Error parsing chat message:', err);
+      }
+    });
+    if (chatSub) subs.push(chatSub);
 
     // Subscribe to room-specific screen share events
-    subs.push(
-      subscribe(screenshareTopic, (msg) => {
+    const screenShareSub = subscribe(screenshareTopic, (msg) => {
+      try {
         const data = JSON.parse(msg.body);
         if (data.userId !== user.id) {
           console.log('Received screen share event:', data);
@@ -158,17 +165,26 @@ const ChatComponent = ({ chatRoom }) => {
             });
           }
         }
-      })
-    );
+      } catch (err) {
+        console.error('Error parsing screen share message:', err);
+      }
+    });
+    if (screenShareSub) subs.push(screenShareSub);
 
     setIsConnected(true);
-    return () => subs.forEach((s) => s.unsubscribe());
-  }, [connected, chatRoom.id]);
+    return () => {
+      subs.forEach((s) => {
+        if (s && s.unsubscribe) {
+          s.unsubscribe();
+        }
+      });
+    };
+  }, [connected, chatRoom.id, user.id, subscribe]);
 
   // Send chat message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !connected || !chatRoom?.id) return;
     const msg = {
       content: newMessage,
       sender: username,
@@ -278,87 +294,96 @@ const ChatComponent = ({ chatRoom }) => {
 
   // Handle incoming WebRTC signaling for multiple users
   useEffect(() => {
-    if (!connected) return;
+    if (!connected || !subscribe || !signalTopic) return;
+    
     const sub = subscribe(signalTopic, (msg) => {
-      const body = JSON.parse(msg.body);
-      if (body.fromUserId === user.id) return;
+      try {
+        const body = JSON.parse(msg.body);
+        if (body.fromUserId === user.id) return;
 
-      if (body.type === 'offer') {
-        // Check if we already have a peer for this user
-        if (peersRef.current[body.fromUserId]) {
-          console.log('Peer already exists for user', body.fromUserId);
-          return;
-        }
-
-        const responder = new SimplePeer({ initiator: false, trickle: false });
-
-        responder.on('signal', (signalData) => {
-          sendMessage(`/app/signal/${chatRoom.id}`, {
-            type: 'answer',
-            fromUserId: user.id,
-            signal: signalData,
-          });
-        });
-
-        responder.on('stream', (remoteStream) => {
-          console.log('📺 Received remote screen stream from user', body.fromUserId);
-          // Update active shares with the stream
-          setActiveShares(prev => prev.map(share => 
-            share.userId === body.fromUserId 
-              ? { ...share, stream: remoteStream, peer: responder }
-              : share
-          ));
-        });
-
-        responder.on('error', (err) => {
-          console.error('❌ Peer connection error:', err);
-        });
-
-        responder.on('close', () => {
-          console.log('🔌 Peer connection closed for user', body.fromUserId);
-          delete peersRef.current[body.fromUserId];
-          // Remove from active shares
-          setActiveShares(prev => prev.filter(s => s.userId !== body.fromUserId));
-        });
-
-        responder.signal(body.signal);
-        peersRef.current[body.fromUserId] = responder;
-        
-        // Ensure the user is in active shares (they should already be from the start event)
-        setActiveShares(prev => {
-          const exists = prev.find(s => s.userId === body.fromUserId);
-          if (!exists) {
-            // This shouldn't happen, but handle it just in case
-            const member = chatRoom.members?.find(m => m.id === body.fromUserId);
-            return [...prev, {
-              userId: body.fromUserId,
-              username: member?.username,
-              displayName: member?.displayName || member?.username || `User ${body.fromUserId}`,
-              stream: null,
-              peer: responder,
-            }];
+        if (body.type === 'offer') {
+          // Check if we already have a peer for this user
+          if (peersRef.current[body.fromUserId]) {
+            console.log('Peer already exists for user', body.fromUserId);
+            return;
           }
-          // Update with peer reference
-          return prev.map(share => 
-            share.userId === body.fromUserId 
-              ? { ...share, peer: responder }
-              : share
-          );
-        });
-      } else if (body.type === 'answer') {
-        // Handle answer for our own peer connection (when we're sharing)
-        const targetPeer = peersRef.current[body.fromUserId] || peer;
-        if (targetPeer) {
-          targetPeer.signal(body.signal);
-        } else if (peer) {
-          // Fallback to main peer
-          peer.signal(body.signal);
+
+          const responder = new SimplePeer({ initiator: false, trickle: false });
+
+          responder.on('signal', (signalData) => {
+            sendMessage(`/app/signal/${chatRoom.id}`, {
+              type: 'answer',
+              fromUserId: user.id,
+              signal: signalData,
+            });
+          });
+
+          responder.on('stream', (remoteStream) => {
+            console.log('📺 Received remote screen stream from user', body.fromUserId);
+            // Update active shares with the stream
+            setActiveShares(prev => prev.map(share => 
+              share.userId === body.fromUserId 
+                ? { ...share, stream: remoteStream, peer: responder }
+                : share
+            ));
+          });
+
+          responder.on('error', (err) => {
+            console.error('❌ Peer connection error:', err);
+          });
+
+          responder.on('close', () => {
+            console.log('🔌 Peer connection closed for user', body.fromUserId);
+            delete peersRef.current[body.fromUserId];
+            // Remove from active shares
+            setActiveShares(prev => prev.filter(s => s.userId !== body.fromUserId));
+          });
+
+          responder.signal(body.signal);
+          peersRef.current[body.fromUserId] = responder;
+          
+          // Ensure the user is in active shares (they should already be from the start event)
+          setActiveShares(prev => {
+            const exists = prev.find(s => s.userId === body.fromUserId);
+            if (!exists) {
+              // This shouldn't happen, but handle it just in case
+              const member = chatRoom.members?.find(m => m.id === body.fromUserId);
+              return [...prev, {
+                userId: body.fromUserId,
+                username: member?.username,
+                displayName: member?.displayName || member?.username || `User ${body.fromUserId}`,
+                stream: null,
+                peer: responder,
+              }];
+            }
+            // Update with peer reference
+            return prev.map(share => 
+              share.userId === body.fromUserId 
+                ? { ...share, peer: responder }
+                : share
+            );
+          });
+        } else if (body.type === 'answer') {
+          // Handle answer for our own peer connection (when we're sharing)
+          const targetPeer = peersRef.current[body.fromUserId] || peer;
+          if (targetPeer) {
+            targetPeer.signal(body.signal);
+          } else if (peer) {
+            // Fallback to main peer
+            peer.signal(body.signal);
+          }
         }
+      } catch (err) {
+        console.error('Error parsing signal message:', err);
       }
     });
 
-    return () => sub.unsubscribe();
-  }, [connected, chatRoom.id, peer]);
+    return () => {
+      if (sub && sub.unsubscribe) {
+        sub.unsubscribe();
+      }
+    };
+  }, [connected, chatRoom.id, peer, subscribe, user.id]);
 
   // Check if any screens are being shared (for view toggle button)
   const hasActiveShares = activeShares.length > 0 || isScreensharing;
