@@ -24,11 +24,13 @@ import {
   Person as PersonIcon, 
   ScreenShare as ScreenShareIcon,
   Stop as StopIcon,
-  FiberManualRecord as CircleIcon
+  FiberManualRecord as CircleIcon,
+  Videocam as VideocamIcon
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import SimplePeer from 'simple-peer';
+import ScreenShareView from './ScreenShareView';
 
 const ChatComponent = ({ chatRoom }) => {
   const [messages, setMessages] = useState([]);
@@ -36,9 +38,12 @@ const ChatComponent = ({ chatRoom }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isScreensharing, setIsScreensharing] = useState(false);
   const [screenshareDialog, setScreenshareDialog] = useState(false);
+  const [viewMode, setViewMode] = useState('chat'); // 'chat' or 'screenshare'
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [peer, setPeer] = useState(null);
+  const [activeShares, setActiveShares] = useState([]); // Array of { userId, username, displayName, stream, peer }
+  const peersRef = useRef({}); // Map of userId -> peer connection
   const messagesEndRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -53,7 +58,7 @@ const ChatComponent = ({ chatRoom }) => {
   const username = user?.username || user?.name || 'Anonymous';
   const chatTopic = `/topic/chat/${chatRoom.id}`;
   const signalTopic = `/topic/signal/${chatRoom.id}`;
-  const screenshareTopic = `/topic/screenshare`; // existing backend endpoint
+  const screenshareTopic = `/topic/screenshare/${chatRoom.id}`; // Room-specific screen share topic
 
   // Scroll to bottom of chat
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -94,12 +99,42 @@ const ChatComponent = ({ chatRoom }) => {
       })
     );
 
-    // Optional notification if you still want your backend's start/stop events
+    // Subscribe to room-specific screen share events
     subs.push(
       subscribe(screenshareTopic, (msg) => {
         const data = JSON.parse(msg.body);
         if (data.userId !== user.id) {
           console.log('Received screen share event:', data);
+          if (data.action === 'start') {
+            // User started sharing - we'll receive their offer via signal topic
+            // Add them to active shares list (stream will be added when peer connection is established)
+            setActiveShares(prev => {
+              const exists = prev.find(s => s.userId === data.userId);
+              if (!exists) {
+                const member = chatRoom.members?.find(m => m.id === data.userId);
+                return [...prev, {
+                  userId: data.userId,
+                  username: data.username || member?.username,
+                  displayName: member?.displayName || member?.username || `User ${data.userId}`,
+                  stream: null, // Will be set when peer connection is established
+                }];
+              }
+              return prev;
+            });
+          } else if (data.action === 'stop') {
+            // User stopped sharing
+            setActiveShares(prev => {
+              const share = prev.find(s => s.userId === data.userId);
+              if (share && share.peer) {
+                share.peer.destroy();
+              }
+              // Clean up peer connection
+              if (peersRef.current[data.userId]) {
+                delete peersRef.current[data.userId];
+              }
+              return prev.filter(s => s.userId !== data.userId);
+            });
+          }
         }
       })
     );
@@ -132,10 +167,25 @@ const ChatComponent = ({ chatRoom }) => {
 
       localVideoRef.current.srcObject = stream;
 
-      // Notify via your existing endpoint
-      sendMessage(`/app/screenshare.start`, { userId: user.id, username, roomId: chatRoom.id });
+      // Notify via room-specific endpoint
+      sendMessage(`/app/screenshare/${chatRoom.id}/start`, { userId: user.id, username, roomId: chatRoom.id });
+      
+      // Add self to active shares
+      setActiveShares(prev => {
+        const exists = prev.find(s => s.userId === user.id);
+        if (!exists) {
+          return [...prev, {
+            userId: user.id,
+            username: username,
+            displayName: user.name || username,
+            stream: stream,
+            peer: newPeer,
+          }];
+        }
+        return prev;
+      });
 
-      // WebRTC connection
+      // WebRTC connection - create peer as initiator
       const newPeer = new SimplePeer({ initiator: true, trickle: false, stream });
 
       newPeer.on('signal', (signalData) => {
@@ -147,13 +197,27 @@ const ChatComponent = ({ chatRoom }) => {
       });
 
       newPeer.on('stream', (remoteStream) => {
-        remoteVideoRef.current.srcObject = remoteStream;
-        setRemoteStream(remoteStream);
+        console.log('📺 Received remote screen stream (initiator)');
+        // Update active shares with the stream
+        setActiveShares(prev => prev.map(share => 
+          share.userId === user.id 
+            ? { ...share, stream: remoteStream }
+            : share
+        ));
+      });
+
+      newPeer.on('error', (err) => {
+        console.error('❌ Peer connection error (initiator):', err);
+      });
+
+      newPeer.on('close', () => {
+        console.log('🔌 Peer connection closed (initiator)');
       });
 
       stream.getVideoTracks()[0].onended = stopScreenShare;
 
       setPeer(newPeer);
+      peersRef.current[user.id] = newPeer;
     } catch (err) {
       console.error('Error starting screen share:', err);
     }
@@ -168,10 +232,18 @@ const ChatComponent = ({ chatRoom }) => {
     setIsScreensharing(false);
     setScreenshareDialog(false);
 
-    sendMessage(`/app/screenshare.start`, { userId: user.id, action: 'stop' });
+    // Remove self from active shares
+    setActiveShares(prev => prev.filter(s => s.userId !== user.id));
+    
+    // Clean up peer connection
+    if (peersRef.current[user.id]) {
+      delete peersRef.current[user.id];
+    }
+
+    sendMessage(`/app/screenshare/${chatRoom.id}/stop`, { userId: user.id, username, roomId: chatRoom.id });
   };
 
-  // Handle incoming WebRTC signaling
+  // Handle incoming WebRTC signaling for multiple users
   useEffect(() => {
     if (!connected) return;
     const sub = subscribe(signalTopic, (msg) => {
@@ -179,6 +251,12 @@ const ChatComponent = ({ chatRoom }) => {
       if (body.fromUserId === user.id) return;
 
       if (body.type === 'offer') {
+        // Check if we already have a peer for this user
+        if (peersRef.current[body.fromUserId]) {
+          console.log('Peer already exists for user', body.fromUserId);
+          return;
+        }
+
         const responder = new SimplePeer({ initiator: false, trickle: false });
 
         responder.on('signal', (signalData) => {
@@ -190,19 +268,61 @@ const ChatComponent = ({ chatRoom }) => {
         });
 
         responder.on('stream', (remoteStream) => {
-          remoteVideoRef.current.srcObject = remoteStream;
-          setRemoteStream(remoteStream);
+          console.log('📺 Received remote screen stream from user', body.fromUserId);
+          // Update active shares with the stream
+          setActiveShares(prev => prev.map(share => 
+            share.userId === body.fromUserId 
+              ? { ...share, stream: remoteStream }
+              : share
+          ));
+        });
+
+        responder.on('error', (err) => {
+          console.error('❌ Peer connection error:', err);
+        });
+
+        responder.on('close', () => {
+          console.log('🔌 Peer connection closed for user', body.fromUserId);
+          delete peersRef.current[body.fromUserId];
         });
 
         responder.signal(body.signal);
-        setPeer(responder);
-      } else if (body.type === 'answer' && peer) {
-        peer.signal(body.signal);
+        peersRef.current[body.fromUserId] = responder;
+        
+        // Update active share with peer reference
+        setActiveShares(prev => prev.map(share => 
+          share.userId === body.fromUserId 
+            ? { ...share, peer: responder }
+            : share
+        ));
+      } else if (body.type === 'answer') {
+        // Handle answer for our own peer connection (when we're sharing)
+        const targetPeer = peersRef.current[body.fromUserId] || peer;
+        if (targetPeer) {
+          targetPeer.signal(body.signal);
+        } else if (peer) {
+          // Fallback to main peer
+          peer.signal(body.signal);
+        }
       }
     });
 
     return () => sub.unsubscribe();
   }, [connected, chatRoom.id, peer]);
+
+  // Check if any screens are being shared (for view toggle button)
+  const hasActiveShares = activeShares.length > 0 || isScreensharing;
+  
+  // Switch to screen share view when someone starts sharing
+  useEffect(() => {
+    if (hasActiveShares && viewMode === 'chat' && activeShares.length > 0) {
+      // Auto-switch to screen share view when first remote share is detected
+      // (but only if user isn't already sharing)
+      if (!isScreensharing) {
+        setViewMode('screenshare');
+      }
+    }
+  }, [activeShares.length, hasActiveShares]);
 
   // Get other user (for private 1:1)
   const getOtherUser = () =>
@@ -211,6 +331,19 @@ const ChatComponent = ({ chatRoom }) => {
   const otherUser = getOtherUser();
 
   // --- UI ---
+  // Show screen share view if active and view mode is set
+  if (viewMode === 'screenshare' && hasActiveShares) {
+    return (
+      <ScreenShareView
+        activeShares={activeShares}
+        localStream={localStream}
+        onBackToChat={() => setViewMode('chat')}
+        currentUser={user}
+        chatRoom={chatRoom}
+      />
+    );
+  }
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1a1a1a' }}>
       {/* Header */}
@@ -237,6 +370,15 @@ const ChatComponent = ({ chatRoom }) => {
             </Typography>
           </Grid>
           <Grid item>
+            {hasActiveShares && (
+              <IconButton
+                onClick={() => setViewMode(viewMode === 'chat' ? 'screenshare' : 'chat')}
+                title={viewMode === 'chat' ? 'View Screen Shares' : 'Back to Chat'}
+                sx={{ color: 'white', mr: 1 }}
+              >
+                <VideocamIcon />
+              </IconButton>
+            )}
             {chatRoom?.members?.length === 2 && (
               <IconButton
                 color={isScreensharing ? 'error' : 'primary'}
@@ -284,11 +426,6 @@ const ChatComponent = ({ chatRoom }) => {
                     {msg.timestamp && new Date(msg.timestamp).toLocaleTimeString()}
                   </Typography>
                 </Box>
-                {isOwn && (
-                  <Avatar sx={{ ml: 2, bgcolor: 'primary.main' }}>
-                    {username.charAt(0).toUpperCase()}
-                  </Avatar>
-                )}
               </ListItem>
             );
           })}
@@ -361,7 +498,17 @@ const ChatComponent = ({ chatRoom }) => {
                   <CardContent>
                     <Typography>{otherUser?.displayName || 'User'}'s Screen</Typography>
                     <Box sx={{ bgcolor: 'black', height: 300, borderRadius: 1 }}>
-                      <video ref={remoteVideoRef} autoPlay style={{ width: '100%', height: '100%' }} />
+                      <video 
+                        ref={(el) => {
+                          remoteVideoRef.current = el;
+                          if (el && remoteStream && !el.srcObject) {
+                            el.srcObject = remoteStream;
+                          }
+                        }} 
+                        autoPlay 
+                        playsInline
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                      />
                     </Box>
                   </CardContent>
                 </Card>
