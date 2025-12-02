@@ -22,7 +22,10 @@ services:
       
      
       # WebSocket Configuration
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      # For cross-device access, set ALLOWED_ORIGINS to * or specific origins
+      # Example: ALLOWED_ORIGINS=* (allows all origins)
+      # Example: ALLOWED_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
     volumes:
       - ./logs:/app/logs
 
@@ -31,6 +34,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:8080/api
+      # For cross-device access, set REACT_APP_API_URL to the server's IP address
+      # Example: REACT_APP_API_URL=http://192.168.1.100:8080/api
+      # If not set, will auto-detect from hostname
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8080/api}
+      # Allow React dev server to accept connections from all interfaces (0.0.0.0)
+      - HOST=0.0.0.0
     depends_on:
       - backend

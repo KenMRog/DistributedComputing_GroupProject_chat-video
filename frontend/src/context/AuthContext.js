@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { buildApiUrl } from '../config/apiConfig';
 
 const AuthContext = createContext();
 
@@ -30,7 +31,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:8080/api/auth/login', {
+      const response = await fetch(buildApiUrl('auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }) => {
       // Use provided username or generate from email
       const finalUsername = username || email.split('@')[0];
       
-      const response = await fetch('http://localhost:8080/api/auth/register', {
+      const response = await fetch(buildApiUrl('auth/register'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

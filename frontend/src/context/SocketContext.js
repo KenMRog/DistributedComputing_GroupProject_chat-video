@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
+import { WS_URL } from '../config/apiConfig';
 
 const SocketContext = createContext();
 
@@ -17,7 +18,9 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socketUrl = 'http://localhost:8080/api/ws';
+    // SockJS uses HTTP/HTTPS for the handshake, not raw WebSocket
+    // The WS_URL from config is already in HTTP format
+    const socketUrl = WS_URL;
     
     // Get username from localStorage
     const savedUser = localStorage.getItem('user');

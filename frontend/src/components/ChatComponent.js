@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import { buildApiUrl } from '../config/apiConfig';
 import SimplePeer from 'simple-peer';
 import ScreenShareView from './ScreenShareView';
 
@@ -73,7 +74,7 @@ const ChatComponent = ({ chatRoom }) => {
   useEffect(() => {
     const loadMessages = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/messages?userId=${user.id}`);
+        const response = await fetch(buildApiUrl(`chat/rooms/${chatRoom.id}/messages?userId=${user.id}`));
         if (response.ok) {
           const data = await response.json();
           setMessages(
@@ -167,7 +168,7 @@ const ChatComponent = ({ chatRoom }) => {
         }
       } catch (err) {
         console.error('Error parsing screen share message:', err);
-      }
+        }
     });
     if (screenShareSub) subs.push(screenShareSub);
 
@@ -215,7 +216,22 @@ const ChatComponent = ({ chatRoom }) => {
       setScreenshareDialog(false); // Don't show dialog, use view toggle instead
 
       // WebRTC connection - create peer as initiator
-      const newPeer = new SimplePeer({ initiator: true, trickle: false, stream });
+      // Configure STUN servers for NAT traversal (helps with cross-device connections)
+      const newPeer = new SimplePeer({
+        initiator: true,
+        trickle: false,
+        stream,
+        config: {
+          iceServers: [
+            // Free public STUN servers (Google)
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            // Add TURN server here for production cross-network support
+            // Example:
+            // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
+          ]
+        }
+      });
 
       newPeer.on('signal', (signalData) => {
         sendMessage(`/app/signal/${chatRoom.id}`, {
@@ -298,50 +314,64 @@ const ChatComponent = ({ chatRoom }) => {
     
     const sub = subscribe(signalTopic, (msg) => {
       try {
-        const body = JSON.parse(msg.body);
-        if (body.fromUserId === user.id) return;
+      const body = JSON.parse(msg.body);
+      if (body.fromUserId === user.id) return;
 
-        if (body.type === 'offer') {
-          // Check if we already have a peer for this user
-          if (peersRef.current[body.fromUserId]) {
-            console.log('Peer already exists for user', body.fromUserId);
-            return;
-          }
+      if (body.type === 'offer') {
+        // Check if we already have a peer for this user
+        if (peersRef.current[body.fromUserId]) {
+          console.log('Peer already exists for user', body.fromUserId);
+          return;
+        }
 
-          const responder = new SimplePeer({ initiator: false, trickle: false });
-
-          responder.on('signal', (signalData) => {
-            sendMessage(`/app/signal/${chatRoom.id}`, {
-              type: 'answer',
-              fromUserId: user.id,
-              signal: signalData,
-            });
+          // Configure STUN servers for NAT traversal
+          const responder = new SimplePeer({
+            initiator: false,
+            trickle: false,
+            config: {
+              iceServers: [
+                // Free public STUN servers (Google)
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                // Add TURN server here for production cross-network support
+                // Example:
+                // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
+              ]
+            }
           });
 
-          responder.on('stream', (remoteStream) => {
-            console.log('📺 Received remote screen stream from user', body.fromUserId);
-            // Update active shares with the stream
-            setActiveShares(prev => prev.map(share => 
-              share.userId === body.fromUserId 
+        responder.on('signal', (signalData) => {
+          sendMessage(`/app/signal/${chatRoom.id}`, {
+            type: 'answer',
+            fromUserId: user.id,
+            signal: signalData,
+          });
+        });
+
+        responder.on('stream', (remoteStream) => {
+          console.log('📺 Received remote screen stream from user', body.fromUserId);
+          // Update active shares with the stream
+          setActiveShares(prev => prev.map(share => 
+            share.userId === body.fromUserId 
                 ? { ...share, stream: remoteStream, peer: responder }
-                : share
-            ));
-          });
+              : share
+          ));
+        });
 
-          responder.on('error', (err) => {
-            console.error('❌ Peer connection error:', err);
-          });
+        responder.on('error', (err) => {
+          console.error('❌ Peer connection error:', err);
+        });
 
-          responder.on('close', () => {
-            console.log('🔌 Peer connection closed for user', body.fromUserId);
-            delete peersRef.current[body.fromUserId];
+        responder.on('close', () => {
+          console.log('🔌 Peer connection closed for user', body.fromUserId);
+          delete peersRef.current[body.fromUserId];
             // Remove from active shares
             setActiveShares(prev => prev.filter(s => s.userId !== body.fromUserId));
-          });
+        });
 
-          responder.signal(body.signal);
-          peersRef.current[body.fromUserId] = responder;
-          
+        responder.signal(body.signal);
+        peersRef.current[body.fromUserId] = responder;
+        
           // Ensure the user is in active shares (they should already be from the start event)
           setActiveShares(prev => {
             const exists = prev.find(s => s.userId === body.fromUserId);
@@ -358,21 +388,21 @@ const ChatComponent = ({ chatRoom }) => {
             }
             // Update with peer reference
             return prev.map(share => 
-              share.userId === body.fromUserId 
-                ? { ...share, peer: responder }
-                : share
+          share.userId === body.fromUserId 
+            ? { ...share, peer: responder }
+            : share
             );
           });
-        } else if (body.type === 'answer') {
-          // Handle answer for our own peer connection (when we're sharing)
-          const targetPeer = peersRef.current[body.fromUserId] || peer;
-          if (targetPeer) {
-            targetPeer.signal(body.signal);
-          } else if (peer) {
-            // Fallback to main peer
-            peer.signal(body.signal);
-          }
+      } else if (body.type === 'answer') {
+        // Handle answer for our own peer connection (when we're sharing)
+        const targetPeer = peersRef.current[body.fromUserId] || peer;
+        if (targetPeer) {
+          targetPeer.signal(body.signal);
+        } else if (peer) {
+          // Fallback to main peer
+          peer.signal(body.signal);
         }
+      }
       } catch (err) {
         console.error('Error parsing signal message:', err);
       }
@@ -453,14 +483,14 @@ const ChatComponent = ({ chatRoom }) => {
                 <VideocamIcon />
               </IconButton>
             )}
-            <IconButton
-              color={isScreensharing ? 'error' : 'primary'}
-              onClick={isScreensharing ? stopScreenShare : startScreenShare}
+              <IconButton
+                color={isScreensharing ? 'error' : 'primary'}
+                onClick={isScreensharing ? stopScreenShare : startScreenShare}
               title={isScreensharing ? 'Stop Screen Share' : 'Start Screen Share - You can choose to share your entire screen or a specific application window'}
-              sx={{ color: 'white' }}
-            >
-              {isScreensharing ? <StopIcon /> : <ScreenShareIcon />}
-            </IconButton>
+                sx={{ color: 'white' }}
+              >
+                {isScreensharing ? <StopIcon /> : <ScreenShareIcon />}
+              </IconButton>
           </Grid>
         </Grid>
       </Paper>

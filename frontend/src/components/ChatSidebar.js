@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { buildApiUrl } from '../config/apiConfig';
 import { formatTime, formatDateShort, formatWeekday } from '../utils/timeUtils';
 
 const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
@@ -59,7 +60,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const fetchChatRooms = async () => {
     if (!user?.id) return; // Early return if user is null
     try {
-      const response = await fetch(`http://localhost:8080/api/chat/rooms?userId=${user.id}`);
+      const response = await fetch(buildApiUrl(`chat/rooms?userId=${user.id}`));
       if (response.ok) {
         const data = await response.json();
         setChats(data);
@@ -73,7 +74,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const fetchPendingInvites = async () => {
     if (!user?.id) return; // Early return if user is null
     try {
-      const response = await fetch(`http://localhost:8080/api/chat/invites/pending?userId=${user.id}`);
+      const response = await fetch(buildApiUrl(`chat/invites/pending?userId=${user.id}`));
       if (response.ok) {
         const data = await response.json();
         setPendingInvites(data);
@@ -86,7 +87,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   // Fetch all users for new chat
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/users');
+      const response = await fetch(buildApiUrl('users'));
       if (response.ok) {
         const data = await response.json();
         setAllUsers(data);
@@ -115,7 +116,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const fetchUsersForInvite = async (q) => {
     if (!user?.id) return; // Early return if user is null
     try {
-      const base = `http://localhost:8080/api/users`;
+      const base = buildApiUrl('users');
       const url = q && q.trim() !== '' ? `${base}?q=${encodeURIComponent(q)}&excludeActiveDmWith=${user.id}` : `${base}?excludeActiveDmWith=${user.id}`;
       const response = await fetch(url);
       if (response.ok) {
@@ -142,7 +143,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     if (!selectedUserId || !user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/api/chat/invite?inviterId=${user.id}`, {
+      const response = await fetch(buildApiUrl(`chat/invite?inviterId=${user.id}`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -168,7 +169,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const handleAcceptInvite = async (inviteId) => {
     if (!user?.id) return; // Early return if user is null
     try {
-      const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/accept?userId=${user.id}`, {
+      const response = await fetch(buildApiUrl(`chat/invite/${inviteId}/accept?userId=${user.id}`), {
         method: 'POST',
       });
 
@@ -185,7 +186,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const handleDeclineInvite = async (inviteId) => {
     if (!user?.id) return; // Early return if user is null
     try {
-      const response = await fetch(`http://localhost:8080/api/chat/invite/${inviteId}/decline?userId=${user.id}`, {
+      const response = await fetch(buildApiUrl(`chat/invite/${inviteId}/decline?userId=${user.id}`), {
         method: 'POST',
       });
 
@@ -483,7 +484,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
                 isPrivate: newRoomIsPrivate,
               };
 
-              const response = await fetch(`http://localhost:8080/api/chat/rooms?creatorId=${user.id}`, {
+              const response = await fetch(buildApiUrl(`chat/rooms?creatorId=${user.id}`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
