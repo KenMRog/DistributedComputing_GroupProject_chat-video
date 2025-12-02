@@ -5,6 +5,7 @@ import { Box, Typography, Button, AppBar, Toolbar, IconButton, Dialog, DialogTit
 import { Logout as LogoutIcon, Person as PersonIcon, Info as InfoIcon, LightMode as LightModeIcon, DarkMode as DarkModeIcon } from '@mui/icons-material';
 import ChatSidebar from './components/ChatSidebar';
 import ChatMain from './components/ChatMain';
+import ScreenShare from './components/ScreenShare';
 import AuthGuard from './components/AuthGuard';
 import { SocketProvider } from './context/SocketContext';
 import { AuthProvider, useAuth } from './context/AuthContext';

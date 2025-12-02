@@ -13,6 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.stereotype.Controller;
+
+import java.util.Map;
 
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
@@ -113,6 +116,14 @@ public class ChatController {
         }
     }
 
+    // Relay WebRTC signaling messages between two peers in a chat room
+    @MessageMapping("/signal/{roomId}")
+    @SendTo("/topic/signal/{roomId}")
+    public Map<String, Object> relaySignal(@DestinationVariable String roomId, Map<String, Object> payload) {
+        // Simply forward the payload to all subscribers in that room
+        return payload;
+    }
+    
     // REST API endpoints
 
     // Get all chat rooms for current user
