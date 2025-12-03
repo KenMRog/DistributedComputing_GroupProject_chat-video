@@ -365,7 +365,8 @@ const ChatComponent = ({ chatRoom }) => {
           });
         } else if (body.type === 'answer') {
           // Handle answer for our own peer connection (when we're sharing)
-          const targetPeer = peersRef.current[body.fromUserId] || peer;
+          // The answer is for our initiator peer, which is stored at peersRef.current[user.id]
+          const targetPeer = peersRef.current[user.id] || peer;
           if (targetPeer) {
             targetPeer.signal(body.signal);
           } else if (peer) {
