@@ -1,0 +1,6 @@
+# SSL certificates (self-signed, should not be committed)
+ssl/
+*.pem
+*.key
+*.crt
+

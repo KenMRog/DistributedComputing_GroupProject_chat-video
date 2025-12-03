@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    expose:
+      - "8080"
+    environment:
+      # Spring Profile: use 'production' for Azure SQL, 'dev' for H2
+      - SPRING_PROFILES_ACTIVE=production
+      
+      # Azure SQL Server Configuration (for production profile)
+      - AZURE_SQL_SERVER=${AZURE_SQL_SERVER:-screen-share.database.windows.net}
+      - AZURE_SQL_DATABASE=${AZURE_SQL_DATABASE:-CMPS-432}
+      - AZURE_SQL_USERNAME=${AZURE_SQL_USERNAME:-Screen-Share-Admin}
+      - AZURE_SQL_PASSWORD=${AZURE_SQL_PASSWORD:-qrsiz.GaJ$$X7.d3}
+      
+      # Azure Service Bus Configuration
+      - AZURE_SERVICEBUS_CONNECTION_STRING=${AZURE_SERVICEBUS_CONNECTION_STRING:-Endpoint=sb://cmps-432.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=32aWelfMfOgk+V+ziRaEk0V+BnpJJgEWg+ASbIaedkY=}
+      - AZURE_SERVICEBUS_QUEUE_NAME=${AZURE_SERVICEBUS_QUEUE_NAME:-screenshare-queue}
+      - AZURE_SERVICEBUS_TOPIC_NAME=${AZURE_SERVICEBUS_TOPIC_NAME:-screenshare-topic}
+      
+      # WebSocket Configuration - Allow HTTPS origins
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    expose:
+      - "3000"
+    environment:
+      # For HTTPS setup, use the nginx proxy which handles HTTPS
+      # The frontend will be accessed through nginx on port 443
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-https://localhost/api}
+      # Allow React dev server to accept connections from all interfaces (0.0.0.0)
+      - HOST=0.0.0.0
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"   # HTTP - redirects to HTTPS
+      - "443:443" # HTTPS
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
