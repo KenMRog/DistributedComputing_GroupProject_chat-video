@@ -1,19 +1,17 @@
 # Root Dockerfile for Render
 # This Dockerfile builds the Spring Boot backend from the root directory
 
-FROM eclipse-temurin:17-jdk AS builder
+FROM maven:3.9-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
 # Copy backend Maven files
 COPY backend/pom.xml backend/
 COPY backend/src backend/src
-COPY backend/.mvn backend/.mvn
-COPY backend/mvnw backend/
 
-# Make mvnw executable and build
+# Build the application using Maven (from image, no mvnw needed)
 WORKDIR /app/backend
-RUN chmod +x mvnw && ./mvnw clean install -DskipTests
+RUN mvn clean install -DskipTests
 
 # Runtime stage
 FROM eclipse-temurin:17-jre
