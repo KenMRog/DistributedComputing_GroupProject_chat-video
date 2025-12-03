@@ -1,13 +1,21 @@
 package com.screenshare.controller;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
+import com.screenshare.config.WebSocketEventListener;
 import com.screenshare.model.SignalMessage;
 
 @Controller
 public class ScreenShareController {
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @MessageMapping("/screenshare.start")
     @SendTo("/topic/screenshare")
@@ -31,10 +39,30 @@ public class ScreenShareController {
     }
 
     @MessageMapping("/screenshare.signal")
-    @SendTo("/topic/screenshare")
-    public SignalMessage handleSignal(SignalMessage message) {
-        // Simply broadcast the message to all subscribers
-        return message;
+    public void handleSignal(SignalMessage message) {
+        // Route signal to specific user if 'to' field is provided, otherwise broadcast
+        if (message.getTo() != null && !message.getTo().isEmpty() && !message.getTo().equals("all")) {
+            // Try to send using Spring's user destination feature
+            // This requires the username to be registered in our session mapping
+            // and the user to be subscribed to /user/{username}/queue/screenshare
+            try {
+                messagingTemplate.convertAndSendToUser(message.getTo(), "/queue/screenshare", message);
+            } catch (Exception e) {
+                // Fallback: if user destination doesn't work, try direct topic
+                System.err.println("Failed to send to user " + message.getTo() + ": " + e.getMessage());
+                messagingTemplate.convertAndSend("/topic/screenshare", message);
+            }
+        } else {
+            // Broadcast to all subscribers (fallback)
+            messagingTemplate.convertAndSend("/topic/screenshare", message);
+        }
+    }
+
+    @MessageMapping("/screenshare.register")
+    public void registerUser(@Header("simpSessionId") String sessionId,
+                            @Payload String username) {
+        // Register username with session for user-specific routing
+        WebSocketEventListener.registerUser(username, sessionId);
     }
 
     public static class ScreenShareMessage {

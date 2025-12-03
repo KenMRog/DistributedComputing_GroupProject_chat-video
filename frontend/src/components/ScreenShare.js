@@ -12,6 +12,7 @@ const ScreenShare = ({ username, targetUser }) => {
   const peerRef = useRef(null);
   const localStream = useRef(null);
   const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
 
   /** -----------------------------
    *  Handle incoming signaling
@@ -33,6 +34,15 @@ const ScreenShare = ({ username, targetUser }) => {
       if (subscription) subscription.unsubscribe();
     };
   }, [connected, username]);
+
+  /** -----------------------------
+   *  Update remote video element when stream changes
+   --------------------------------*/
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
 
   /** -----------------------------
    *  Send STOMP signaling message
@@ -207,15 +217,14 @@ const ScreenShare = ({ username, targetUser }) => {
             Viewing {targetUser}'s screen
           </Typography>
           <video
+            ref={remoteVideoRef}
             autoPlay
             playsInline
-            ref={(v) => {
-              if (v && !v.srcObject) v.srcObject = remoteStream;
-            }}
             style={{
               width: "100%",
               borderRadius: "8px",
               background: "black",
+              objectFit: "contain",
             }}
           />
         </Box>

@@ -17,7 +17,19 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const socketUrl = 'http://localhost:8080/ws';
+    const socketUrl = 'http://localhost:8080/api/ws';
+    
+    // Get username from localStorage
+    const savedUser = localStorage.getItem('user');
+    let username = null;
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        username = user.username || user.name || user.email;
+      } catch (e) {
+        console.error('Error parsing user from localStorage:', e);
+      }
+    }
 
     // Create a new STOMP client
     const client = new Client({
@@ -27,6 +39,15 @@ export const SocketProvider = ({ children }) => {
         console.log('✅ Connected to WebSocket:', frame);
         setConnected(true);
         setStompClient(client);
+        
+        // Register username with backend for user-specific routing
+        if (username) {
+          client.publish({
+            destination: '/app/screenshare.register',
+            body: username
+          });
+          console.log('📝 Registered username:', username);
+        }
       },
       onDisconnect: () => {
         console.warn('⚠️ Disconnected from WebSocket');
