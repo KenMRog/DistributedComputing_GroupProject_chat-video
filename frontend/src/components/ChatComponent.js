@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -6,6 +6,8 @@ import {
   Button,
   List,
   ListItem,
+  ListItemAvatar,
+  ListItemText,
   Typography,
   Avatar,
   Grid,
@@ -13,6 +15,11 @@ import {
   Chip,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Checkbox,
 } from '@mui/material';
 import { 
   Send as SendIcon, 
@@ -20,7 +27,8 @@ import {
   ScreenShare as ScreenShareIcon,
   Stop as StopIcon,
   FiberManualRecord as CircleIcon,
-  Videocam as VideocamIcon
+  Videocam as VideocamIcon,
+  PersonAdd as PersonAddIcon
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +43,10 @@ const ChatComponent = ({ chatRoom }) => {
   const [viewMode, setViewMode] = useState('chat'); // 'chat' or 'screenshare'
   const [activeShares, setActiveShares] = useState([]); // Array of { userId, username, displayName, stream, peer }
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteSearchTerm, setInviteSearchTerm] = useState('');
+  const [inviteResults, setInviteResults] = useState([]);
+  const [selectedInviteUserIds, setSelectedInviteUserIds] = useState([]);
   const messagesEndRef = useRef(null);
   
   const { connected, sendMessage, subscribe } = useSocket();
@@ -247,6 +259,102 @@ const ChatComponent = ({ chatRoom }) => {
 
   const otherUser = getOtherUser();
 
+  // Check if user can invite (must be private room and user must be creator/admin)
+  const canInviteUsers = chatRoom?.roomType === 'PRIVATE' && 
+    (chatRoom?.createdBy?.id === user?.id || chatRoom?.admins?.some(admin => admin.id === user?.id));
+
+  // Fetch users for invite search
+  const fetchUsersForInvite = useCallback(async (searchTerm = '') => {
+    try {
+      const url = searchTerm 
+        ? `http://localhost:8080/api/users?q=${encodeURIComponent(searchTerm)}`
+        : 'http://localhost:8080/api/users';
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        // Filter out current user and existing members
+        const existingMemberIds = new Set(chatRoom?.members?.map(m => m.id) || []);
+        setInviteResults(data.filter(u => u.id !== user?.id && !existingMemberIds.has(u.id)));
+      }
+    } catch (error) {
+      console.error('Error fetching users for invite:', error);
+    }
+  }, [chatRoom?.members, user?.id]);
+
+  // Debounce search
+  useEffect(() => {
+    if (!inviteDialogOpen) return;
+    const timer = setTimeout(() => {
+      fetchUsersForInvite(inviteSearchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [inviteSearchTerm, inviteDialogOpen, fetchUsersForInvite]);
+
+  // Load users when dialog opens
+  useEffect(() => {
+    if (inviteDialogOpen) {
+      fetchUsersForInvite();
+    } else {
+      // Reset when closing
+      setInviteSearchTerm('');
+      setSelectedInviteUserIds([]);
+      setInviteResults([]);
+    }
+  }, [inviteDialogOpen, fetchUsersForInvite]);
+
+  // Handle inviting users to room
+  const handleInviteUsers = async () => {
+    if (!selectedInviteUserIds.length || !chatRoom?.id || !user?.id) return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/invites?inviterId=${user.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          invitedUserIds: selectedInviteUserIds.map(id => parseInt(id))
+        }),
+      });
+
+      if (response.ok) {
+        setNotification({
+          open: true,
+          message: `Successfully invited ${selectedInviteUserIds.length} user(s)`,
+          severity: 'success'
+        });
+        setInviteDialogOpen(false);
+        setSelectedInviteUserIds([]);
+        setInviteSearchTerm('');
+      } else {
+        const errorData = await response.text();
+        setNotification({
+          open: true,
+          message: `Failed to send invites: ${errorData || 'Unknown error'}`,
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error inviting users:', error);
+      setNotification({
+        open: true,
+        message: 'Failed to send invites. Please try again.',
+        severity: 'error'
+      });
+    }
+  };
+
+  const toggleUserSelection = (userId) => {
+    setSelectedInviteUserIds(prev => {
+      const userIdStr = String(userId);
+      if (prev.includes(userIdStr)) {
+        return prev.filter(id => id !== userIdStr);
+      } else {
+        return [...prev, userIdStr];
+      }
+    });
+  };
+
   // --- UI ---
   // Show screen share view if active and view mode is set
   // Use ref if state was lost
@@ -289,6 +397,15 @@ const ChatComponent = ({ chatRoom }) => {
             </Typography>
           </Grid>
           <Grid item>
+            {canInviteUsers && (
+              <IconButton
+                onClick={() => setInviteDialogOpen(true)}
+                title="Invite Users to Room"
+                sx={{ color: theme.palette.text.primary, mr: 1 }}
+              >
+                <PersonAddIcon />
+              </IconButton>
+            )}
             {hasActiveShares && (
               <IconButton
                 onClick={() => setViewMode(viewMode === 'chat' ? 'screenshare' : 'chat')}
@@ -412,6 +529,62 @@ const ChatComponent = ({ chatRoom }) => {
           </Button>
         </Box>
       </Paper>
+
+      {/* Invite Users Dialog */}
+      <Dialog open={inviteDialogOpen} onClose={() => setInviteDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Invite Users to {chatRoom?.name || 'Room'}</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            placeholder="Search users by name, username or email"
+            value={inviteSearchTerm}
+            onChange={(e) => setInviteSearchTerm(e.target.value)}
+            sx={{ mb: 2, mt: 1 }}
+          />
+
+          <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+            {inviteResults.map((u) => {
+              const isSelected = selectedInviteUserIds.includes(String(u.id));
+              return (
+                <ListItem 
+                  key={u.id} 
+                  button 
+                  onClick={() => toggleUserSelection(u.id)}
+                  selected={isSelected}
+                >
+                  <Checkbox
+                    checked={isSelected}
+                    tabIndex={-1}
+                    disableRipple
+                  />
+                  <ListItemAvatar>
+                    <Avatar>{(u.displayName || u.username || '').charAt(0).toUpperCase()}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText 
+                    primary={u.displayName || u.username} 
+                    secondary={u.email || ''} 
+                  />
+                </ListItem>
+              );
+            })}
+            {inviteResults.length === 0 && (
+              <ListItem>
+                <ListItemText primary="No users found" secondary="Try a different search term" />
+              </ListItem>
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={handleInviteUsers} 
+            variant="contained" 
+            disabled={selectedInviteUserIds.length === 0}
+          >
+            Invite {selectedInviteUserIds.length > 0 ? `${selectedInviteUserIds.length} ` : ''}User{selectedInviteUserIds.length !== 1 ? 's' : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Notification Snackbar */}
       <Snackbar

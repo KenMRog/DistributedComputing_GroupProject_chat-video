@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { formatTime, formatDateShort, formatWeekday } from '../utils/timeUtils';
 
 const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
@@ -50,6 +51,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const [inviteSearchTerm, setInviteSearchTerm] = useState('');
   const [inviteResults, setInviteResults] = useState([]);
   const { user } = useAuth();
+  const { connected, subscribe } = useSocket();
 
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomDescription, setNewRoomDescription] = useState('');
@@ -110,6 +112,40 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
       setAllUsers([]);
     }
   }, [user?.id]);
+
+  // Subscribe to real-time invite notifications
+  useEffect(() => {
+    if (!connected || !subscribe || !user?.id) return;
+
+    const inviteTopic = `/topic/invites/${user.id}`;
+    console.log('Subscribing to invite notifications:', inviteTopic);
+    
+    const inviteSub = subscribe(inviteTopic, (msg) => {
+      try {
+        const invite = JSON.parse(msg.body);
+        console.log('Received new invite notification:', invite);
+        
+        // Add the new invite to pending invites list
+        setPendingInvites(prev => {
+          // Check if invite already exists (avoid duplicates)
+          const exists = prev.find(inv => inv.id === invite.id);
+          if (exists) {
+            return prev;
+          }
+          return [invite, ...prev];
+        });
+      } catch (err) {
+        console.error('Error parsing invite notification:', err);
+      }
+    });
+
+    return () => {
+      if (inviteSub && inviteSub.unsubscribe) {
+        console.log('Unsubscribing from invite notifications');
+        inviteSub.unsubscribe();
+      }
+    };
+  }, [connected, subscribe, user?.id]);
 
   // Fetch users for new DM invite search (top 5 match)
   const fetchUsersForInvite = async (q) => {

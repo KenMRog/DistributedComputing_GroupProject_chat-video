@@ -2,6 +2,7 @@ package com.screenshare.controller;
 
 import com.screenshare.dto.*;
 import com.screenshare.entity.ChatRoom;
+import com.screenshare.entity.ChatInvite;
 import com.screenshare.entity.MessageType;
 import com.screenshare.entity.User;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
@@ -168,12 +169,20 @@ public class ChatController {
     public ResponseEntity<ChatInviteDto> createInvite(@Valid @RequestBody CreateChatInviteRequest request, 
                                                      @RequestParam Long inviterId) {
         try {
-            ChatInviteDto invite = new ChatInviteDto(chatService.createChatInvite(
+            ChatInvite invite = chatService.createChatInvite(
                     inviterId,
                     request.getInvitedUserId(),
                     request.getDescription()
-            ));
-            return ResponseEntity.ok(invite);
+            );
+            ChatInviteDto inviteDto = new ChatInviteDto(invite);
+            
+            // Notify the invited user via WebSocket using user ID topic
+            messagingTemplate.convertAndSend(
+                "/topic/invites/" + invite.getInvitedUser().getId(),
+                inviteDto
+            );
+            
+            return ResponseEntity.ok(inviteDto);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -186,7 +195,18 @@ public class ChatController {
                                                                  @RequestParam Long inviterId) {
         try {
             List<ChatInviteDto> created = request.getInvitedUserIds().stream()
-                    .map(uid -> new ChatInviteDto(chatService.createChatInviteForRoom(inviterId, roomId, uid)))
+                    .map(uid -> {
+                        ChatInvite invite = chatService.createChatInviteForRoom(inviterId, roomId, uid);
+                        ChatInviteDto inviteDto = new ChatInviteDto(invite);
+                        
+                        // Notify the invited user via WebSocket using user ID topic
+                        messagingTemplate.convertAndSend(
+                            "/topic/invites/" + invite.getInvitedUser().getId(),
+                            inviteDto
+                        );
+                        
+                        return inviteDto;
+                    })
                     .collect(Collectors.toList());
 
             return ResponseEntity.ok(created);
