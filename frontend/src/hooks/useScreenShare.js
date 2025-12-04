@@ -64,6 +64,34 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           return;
         }
         
+        // Remove stream from peer before destroying to prevent stream errors
+        try {
+          if (peerToClean._pc) {
+            // Remove tracks from peer connection
+            const senders = peerToClean._pc.getSenders();
+            senders.forEach(sender => {
+              if (sender.track) {
+                sender.track.stop();
+              }
+              if (sender.replaceTrack) {
+                sender.replaceTrack(null).catch(() => {});
+              }
+            });
+          }
+          
+          // Clear any stream references
+          if (peerToClean.streams && Array.isArray(peerToClean.streams)) {
+            peerToClean.streams.forEach(stream => {
+              if (stream && stream.getTracks) {
+                stream.getTracks().forEach(track => track.stop());
+              }
+            });
+          }
+        } catch (streamCleanupErr) {
+          // Ignore errors during stream cleanup
+          console.log('Error cleaning up peer streams:', streamCleanupErr.message);
+        }
+        
         try {
           // Try to end gracefully first if the method exists
           if (typeof peerToClean.end === 'function' && !peerToClean.ended) {
@@ -74,16 +102,33 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           console.log('Error ending peer:', endErr.message);
         }
         
-        // Destroy the peer - wrap in additional try-catch for process errors
+        // Destroy the peer - wrap in additional try-catch for process/stream errors
         try {
           peerToClean.destroy();
         } catch (destroyErr) {
-          // Handle the "process is not defined" error specifically
-          if (destroyErr.message && destroyErr.message.includes('process')) {
+          // Handle various browser environment errors from simple-peer
+          // The error might not have a message, so check stack trace too
+          const errorMsg = destroyErr.message || String(destroyErr) || '';
+          const errorStack = destroyErr.stack || '';
+          const errorName = destroyErr.name || '';
+          const fullError = (errorMsg + ' ' + errorStack + ' ' + errorName).toLowerCase();
+          
+          // Catch common simple-peer browser compatibility errors
+          if (fullError.includes('process') || 
+              fullError.includes('_readablestate') || 
+              fullError.includes('stream is undefined') ||
+              fullError.includes("can't access property") ||
+              fullError.includes("cannot access property") ||
+              fullError.includes('cannot read property') ||
+              fullError.includes('typeerror') ||
+              errorName === 'TypeError') {
             console.log('Skipping peer destroy due to browser environment limitation');
             // Manually clear references if destroy fails
             if (peerToClean.destroyed !== undefined) {
               peerToClean.destroyed = true;
+            }
+            if (peerToClean._destroyed !== undefined) {
+              peerToClean._destroyed = true;
             }
           } else {
             console.error('Error destroying peer:', destroyErr);
@@ -144,19 +189,6 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
         delete peersRef.current[user.id];
       }
 
-      if (!silent && roomIdToNotify && connected) {
-        
-        // Post a chat message that stream ended
-        if (wasStreaming && roomIdToNotify === chatRoom?.id) {
-          const streamEndMessage = {
-            content: `${username}'s stream has ended.`,
-            sender: 'System',
-            senderId: user.id,
-            type: 'SYSTEM',
-          };
-          sendMessage(`/app/chat/${roomIdToNotify}/sendMessage`, streamEndMessage);
-        }
-      }
     } catch (err) {
       console.error('Error in stopScreenShare:', err);
       // Still clean up state even if there's an error
@@ -377,17 +409,21 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           
           setActiveShares(prev => {
             const share = prev.find(s => s.userId === data.userId);
-            cleanupPeer(share?.peer);
+            
+            // Clean up the peer connection
+            if (share?.peer) {
+              cleanupPeer(share.peer);
+            }
+            
+            // Clean up any peer ref
             if (peersRef.current[data.userId]) {
+              cleanupPeer(peersRef.current[data.userId]);
               delete peersRef.current[data.userId];
             }
+            
+            // Clear the stream from activeShares immediately
             return prev.filter(s => s.userId !== data.userId);
           });
-
-          if (connected && chatRoom?.id) {
-            // Note: The stream end message will be handled by the stop handler
-            // This is just for remote user streams
-          }
         }
       } catch (err) {
         console.error('Error parsing screen share message:', err);
@@ -460,10 +496,15 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
 
           responder.on('close', () => {
             console.log('🔌 Peer connection closed for user', body.fromUserId);
-            delete peersRef.current[body.fromUserId];
             setActiveShares(prev => {
               const share = prev.find(s => s.userId === body.fromUserId);
-              cleanupPeer(share?.peer);
+              if (share?.peer) {
+                cleanupPeer(share.peer);
+              }
+              if (peersRef.current[body.fromUserId]) {
+                cleanupPeer(peersRef.current[body.fromUserId]);
+                delete peersRef.current[body.fromUserId];
+              }
               return prev.filter(s => s.userId !== body.fromUserId);
             });
           });

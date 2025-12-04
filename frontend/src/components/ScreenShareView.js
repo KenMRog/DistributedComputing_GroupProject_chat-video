@@ -37,35 +37,51 @@ const ScreenShareView = ({
 
   // Update main video when selection changes or streams update
   useEffect(() => {
-    if (mainVideoRef.current && selectedShareId) {
-      const selectedShare = activeShares.find(s => s.userId === selectedShareId);
-      let streamToUse = null;
-      
-      // If it's the current user's share, use localStream if available
-      if (selectedShareId === currentUser?.id && localStream) {
-        streamToUse = localStream;
-      } else if (selectedShare && selectedShare.stream) {
-        streamToUse = selectedShare.stream;
-      }
-      
-      if (streamToUse) {
-        // Only update if the stream has changed to avoid unnecessary re-renders
-        if (mainVideoRef.current.srcObject !== streamToUse) {
-          mainVideoRef.current.srcObject = streamToUse;
-        }
-        // Ensure video plays
-        mainVideoRef.current.play().catch(err => {
-          console.error('Error playing video:', err);
-          // Retry playing after a short delay
-          setTimeout(() => {
-            if (mainVideoRef.current && mainVideoRef.current.srcObject === streamToUse) {
-              mainVideoRef.current.play().catch(() => {});
-            }
-          }, 100);
-        });
-      } else if (mainVideoRef.current && mainVideoRef.current.srcObject) {
-        // Only clear if there was a stream before
+    if (!mainVideoRef.current) return;
+    
+    // Check if selected share still exists
+    const selectedShare = activeShares.find(s => s.userId === selectedShareId);
+    
+    // If no selected share or share doesn't exist anymore, clear the video
+    if (!selectedShareId || !selectedShare) {
+      if (mainVideoRef.current.srcObject) {
         mainVideoRef.current.srcObject = null;
+        mainVideoRef.current.pause();
+        mainVideoRef.current.load(); // Reset video element
+      }
+      return;
+    }
+    
+    let streamToUse = null;
+    
+    // If it's the current user's share, use localStream if available
+    if (selectedShareId === currentUser?.id && localStream) {
+      streamToUse = localStream;
+    } else if (selectedShare && selectedShare.stream) {
+      streamToUse = selectedShare.stream;
+    }
+    
+    if (streamToUse) {
+      // Only update if the stream has changed to avoid unnecessary re-renders
+      if (mainVideoRef.current.srcObject !== streamToUse) {
+        mainVideoRef.current.srcObject = streamToUse;
+      }
+      // Ensure video plays
+      mainVideoRef.current.play().catch(err => {
+        console.error('Error playing video:', err);
+        // Retry playing after a short delay
+        setTimeout(() => {
+          if (mainVideoRef.current && mainVideoRef.current.srcObject === streamToUse) {
+            mainVideoRef.current.play().catch(() => {});
+          }
+        }, 100);
+      });
+    } else {
+      // Clear if stream is not available
+      if (mainVideoRef.current.srcObject) {
+        mainVideoRef.current.srcObject = null;
+        mainVideoRef.current.pause();
+        mainVideoRef.current.load(); // Reset video element
       }
     }
   }, [selectedShareId, activeShares, localStream, currentUser?.id]);
@@ -84,13 +100,36 @@ const ScreenShareView = ({
         }
       } else if (ref && !share.stream) {
         // Clear if stream is no longer available
-        ref.srcObject = null;
+        if (ref.srcObject) {
+          ref.srcObject = null;
+          ref.pause();
+        }
+      }
+    });
+    
+    // Clean up refs for shares that no longer exist
+    Object.keys(thumbnailRefs.current).forEach(userId => {
+      if (!activeShares.find(s => s.userId === userId)) {
+        const ref = thumbnailRefs.current[userId];
+        if (ref && ref.srcObject) {
+          ref.srcObject = null;
+          ref.pause();
+        }
+        delete thumbnailRefs.current[userId];
       }
     });
   }, [activeShares]);
 
   const selectedShare = activeShares.find(s => s.userId === selectedShareId);
-  const thumbnailShares = activeShares.filter(s => s.userId !== selectedShareId);
+  // Filter out the local stream from thumbnails if it's being shown in main view
+  // The local stream should only appear in thumbnails if it's not selected
+  const thumbnailShares = activeShares.filter(s => {
+    // Don't show local stream in thumbnails if it's selected (it's in main view)
+    if (selectedShareId === currentUser?.id && s.userId === currentUser?.id) {
+      return false;
+    }
+    return s.userId !== selectedShareId;
+  });
 
   // Helper to safely get the first character of a value (handles numbers/objects)
   const firstChar = (val) => {
@@ -312,69 +351,6 @@ const ScreenShareView = ({
           </Box>
         )}
 
-        {/* Show local stream in thumbnails if sharing */}
-        {localStream && (
-          <Box
-            onClick={() => {
-              // Find local share and select it
-              const localShare = activeShares.find(s => s.userId === currentUser?.id);
-              if (localShare) {
-                setSelectedShareId(localShare.userId);
-              }
-            }}
-            sx={{
-              minWidth: 200,
-              height: 120,
-              bgcolor: '#000',
-              borderRadius: 1,
-              overflow: 'hidden',
-              cursor: 'pointer',
-              position: 'relative',
-              border: selectedShareId === currentUser?.id ? '2px solid primary.main' : '2px solid transparent',
-              '&:hover': {
-                borderColor: 'primary.main',
-                transform: 'scale(1.05)',
-              },
-              transition: 'all 0.2s',
-            }}
-          >
-            <video
-              ref={(el) => {
-                if (el) el.srcObject = localStream;
-              }}
-              autoPlay
-              playsInline
-              muted
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-            />
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.9)',
-                color: theme.palette.text.primary,
-                px: 1,
-                py: 0.5,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-              }}
-            >
-              <Avatar sx={{ width: 16, height: 16, bgcolor: 'primary.main', fontSize: 10 }}>
-                {firstChar(currentUser?.username || currentUser?.name || 'You')}
-              </Avatar>
-              <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                You (Your Screen)
-              </Typography>
-            </Box>
-          </Box>
-        )}
       </Box>
     </Box>
   );

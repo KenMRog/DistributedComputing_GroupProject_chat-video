@@ -78,6 +78,8 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
 
   // Load historical messages
   useEffect(() => {
+    if (!chatRoom?.id || !user?.id) return;
+    
     const loadMessages = async () => {
       try {
         const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/messages?userId=${user.id}`);
@@ -97,7 +99,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
       }
     };
     loadMessages();
-  }, [chatRoom.id, user.id]);
+  }, [chatRoom?.id, user?.id]);
 
   // Clean up peer connections when switching away from a chat (but preserve if sharing)
   const previousRoomIdRef = useRef(null);
@@ -110,7 +112,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     // When returning to a room we're sharing to, restore our own share in activeShares
     const streamToUse = localStream || localStreamRef.current;
     
-    if (streamToUse && sharingRoomIdRef.current === currentRoomId && currentRoomId) {
+    if (streamToUse && sharingRoomIdRef.current === currentRoomId && currentRoomId && user?.id) {
       setActiveShares(prev => {
         const exists = prev.find(s => s.userId === user.id);
         if (!exists) {
@@ -133,16 +135,18 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     
     return () => {
       // Clean up remote shares when leaving a room
-      const isSharingToThisRoom = sharingRoomIdRef.current === previousRoomId;
-      if (!isSharingToThisRoom && previousRoomId) {
-        setActiveShares(prev => prev.filter(s => s.userId === user.id));
+      if (user?.id) {
+        const isSharingToThisRoom = sharingRoomIdRef.current === previousRoomId;
+        if (!isSharingToThisRoom && previousRoomId) {
+          setActiveShares(prev => prev.filter(s => s.userId !== user.id));
+        }
       }
     };
-  }, [chatRoom?.id, localStream, user.id, username, sharingRoomIdRef, localStreamRef]);
+  }, [chatRoom?.id, localStream, user?.id, username, sharingRoomIdRef, localStreamRef]);
 
   // Subscribe to chat and screen share notifications
   useEffect(() => {
-    if (!connected || !subscribe || !chatRoom?.id || !chatTopic) return;
+    if (!connected || !subscribe || !chatRoom?.id || !chatTopic || !user?.id) return;
 
     const subs = [];
     
@@ -168,7 +172,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
       const screenShareSub = subscribe(screenshareTopic, (msg) => {
         try {
           const data = JSON.parse(msg.body);
-          if (data.userId !== user.id) {
+          if (user?.id && data.userId !== user.id) {
             const member = chatRoom.members?.find(m => m.id === data.userId);
             const displayName = data.username || member?.displayName || member?.username || `User ${data.userId}`;
             
@@ -179,16 +183,6 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
                 severity: 'info'
               });
             } else if (data.action === 'stop') {
-              // Post chat message
-              if (connected && chatRoom?.id) {
-                const streamEndMessage = {
-                  content: `${displayName}'s stream has ended.`,
-                  sender: 'System',
-                  senderId: null,
-                  type: 'SYSTEM',
-                };
-                setMessages((prev) => [...prev, streamEndMessage]);
-              }
               setNotification({
                 open: true,
                 message: `${displayName}'s stream has ended`,
@@ -212,16 +206,16 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
         }
       });
     };
-  }, [connected, chatRoom.id, user.id, subscribe, sendMessage]);
+  }, [connected, chatRoom?.id, user?.id, subscribe, sendMessage]);
 
   // Send chat message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !connected || !chatRoom?.id) return;
+    if (!newMessage.trim() || !connected || !chatRoom?.id || !user?.id) return;
     const msg = {
       content: newMessage,
       sender: username,
-      senderId: user.id,
+      senderId: user?.id,
       type: 'CHAT',
     };
     sendMessage(`/app/chat/${chatRoom.id}/sendMessage`, msg);
@@ -253,7 +247,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
   // Check if any screens are being shared (for view toggle button)
   const actuallySharing = isScreensharing || (localStreamRef.current && sharingRoomIdRef.current);
   const hasActiveShares = activeShares.some(s => 
-    s.userId === user.id || (s.stream !== null && s.userId !== user.id)
+    (user?.id && s.userId === user.id) || (s.stream !== null && s.userId !== user?.id)
   ) || actuallySharing;
   
   // Show indicator if user is sharing to a different room

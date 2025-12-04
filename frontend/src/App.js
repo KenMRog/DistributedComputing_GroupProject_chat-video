@@ -36,6 +36,12 @@ function AppContent() {
   const confirmLogout = () => {
     setLogoutConfirmOpen(false);
     setSelectedChat(null); // Clear selected chat before logout
+    
+    // Stop any active streams before logout
+    if (isStreaming) {
+      stopStreaming();
+    }
+    
     logout();
   };
 
