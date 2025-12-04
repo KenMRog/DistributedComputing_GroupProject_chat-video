@@ -11,7 +11,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import ChatComponent from './ChatComponent';
 
-const ChatMain = ({ selectedChat, user }) => {
+const ChatMain = ({ selectedChat, user, onLeaveRoom }) => {
   if (!selectedChat) {
     return (
       <motion.div
@@ -104,7 +104,7 @@ const ChatMain = ({ selectedChat, user }) => {
       style={{ flexGrow: 1, height: '100%' }}
     >
       <Box sx={{ flexGrow: 1, height: '100%' }}>
-        <ChatComponent chatRoom={selectedChat} />
+        <ChatComponent chatRoom={selectedChat} onLeaveRoom={onLeaveRoom} />
       </Box>
     </motion.div>
   );

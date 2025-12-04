@@ -38,7 +38,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { formatTime, formatDateShort, formatWeekday } from '../utils/timeUtils';
 
-const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
+const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, refreshKey }) => {
   const [chats, setChats] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingInvites, setPendingInvites] = useState([]);
@@ -111,7 +111,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
       setPendingInvites([]);
       setAllUsers([]);
     }
-  }, [user?.id]);
+  }, [user?.id, refreshKey]);
 
   // Subscribe to real-time invite notifications
   useEffect(() => {

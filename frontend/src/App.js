@@ -22,6 +22,7 @@ function AppContent() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [leaveRoomConfirmOpen, setLeaveRoomConfirmOpen] = useState(false);
   const [pendingChat, setPendingChat] = useState(null);
+  const [chatListRefreshKey, setChatListRefreshKey] = useState(0);
   const { isStreaming, stopStreaming } = useStream();
 
   const { mode, toggleTheme } = useTheme();
@@ -182,9 +183,19 @@ function AppContent() {
         <ChatSidebar 
           selectedChatId={selectedChat?.id} 
           onChatSelect={handleChatSelect}
+          refreshKey={chatListRefreshKey}
         />
         <AnimatePresence mode="wait">
-          <ChatMain key={selectedChat?.id || 'empty'} selectedChat={selectedChat} user={user} />
+          <ChatMain 
+            key={selectedChat?.id || 'empty'} 
+            selectedChat={selectedChat} 
+            user={user}
+            onLeaveRoom={() => {
+              setSelectedChat(null);
+              // Trigger refresh of chat list
+              setChatListRefreshKey(prev => prev + 1);
+            }}
+          />
         </AnimatePresence>
       </Box>
       <About open={aboutOpen} onClose={handleCloseAbout} />

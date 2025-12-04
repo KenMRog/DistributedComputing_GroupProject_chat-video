@@ -28,7 +28,8 @@ import {
   Stop as StopIcon,
   FiberManualRecord as CircleIcon,
   Videocam as VideocamIcon,
-  PersonAdd as PersonAddIcon
+  PersonAdd as PersonAddIcon,
+  ExitToApp as ExitToAppIcon
 } from '@mui/icons-material';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +37,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useScreenShare } from '../hooks/useScreenShare';
 import ScreenShareView from './ScreenShareView';
 
-const ChatComponent = ({ chatRoom }) => {
+const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
@@ -263,6 +264,55 @@ const ChatComponent = ({ chatRoom }) => {
   const canInviteUsers = chatRoom?.roomType === 'PRIVATE' && 
     (chatRoom?.createdBy?.id === user?.id || chatRoom?.admins?.some(admin => admin.id === user?.id));
 
+  // Check if user can leave (private or public room, but not if they're the creator)
+  const canLeaveRoom = chatRoom && 
+    (chatRoom.roomType === 'PRIVATE' || chatRoom.roomType === 'PUBLIC') &&
+    chatRoom?.createdBy?.id !== user?.id;
+
+  // Handle leaving a room
+  const handleLeaveRoom = async () => {
+    if (!chatRoom?.id || !user?.id) return;
+
+    try {
+      const response = await fetch(`http://localhost:8080/api/chat/rooms/${chatRoom.id}/leave?userId=${user.id}`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        setNotification({
+          open: true,
+          message: `Left ${chatRoom.name || 'the room'}`,
+          severity: 'success'
+        });
+        // Call the callback to refresh chat list and navigate away
+        if (onLeaveRoom) {
+          onLeaveRoom();
+        }
+      } else {
+        let errorMessage = 'Unknown error';
+        try {
+          const errorData = await response.text();
+          errorMessage = errorData || `HTTP ${response.status}: ${response.statusText}`;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        console.error('Leave room error:', errorMessage);
+        setNotification({
+          open: true,
+          message: `Failed to leave room: ${errorMessage}`,
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      console.error('Error leaving room:', error);
+      setNotification({
+        open: true,
+        message: 'Failed to leave room. Please try again.',
+        severity: 'error'
+      });
+    }
+  };
+
   // Fetch users for invite search
   const fetchUsersForInvite = useCallback(async (searchTerm = '') => {
     try {
@@ -404,6 +454,15 @@ const ChatComponent = ({ chatRoom }) => {
                 sx={{ color: theme.palette.text.primary, mr: 1 }}
               >
                 <PersonAddIcon />
+              </IconButton>
+            )}
+            {canLeaveRoom && (
+              <IconButton
+                onClick={handleLeaveRoom}
+                title="Leave Room"
+                sx={{ color: theme.palette.text.primary, mr: 1 }}
+              >
+                <ExitToAppIcon />
               </IconButton>
             )}
             {hasActiveShares && (

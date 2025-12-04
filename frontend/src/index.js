@@ -1,3 +1,9 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import ErrorBoundary from './ErrorBoundary';
+
 // Polyfill for Node.js 'process' global that simple-peer expects
 // Create React App replaces process.env.NODE_ENV at build time via webpack DefinePlugin
 if (typeof window !== 'undefined' && typeof process === 'undefined') {
@@ -11,12 +17,6 @@ if (typeof window !== 'undefined' && typeof process === 'undefined') {
     versions: {}
   };
 }
-
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-import ErrorBoundary from './ErrorBoundary';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

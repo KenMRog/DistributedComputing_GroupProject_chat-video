@@ -276,6 +276,17 @@ public class ChatController {
         }
     }
 
+    // Leave a room
+    @PostMapping("/rooms/{roomId}/leave")
+    public ResponseEntity<String> leaveRoom(@PathVariable Long roomId, @RequestParam Long userId) {
+        try {
+            chatService.leaveRoom(roomId, userId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     // Get chat room by ID
     @GetMapping("/rooms/{roomId}")
     public ResponseEntity<ChatRoomDto> getChatRoom(@PathVariable Long roomId, @RequestParam Long userId) {

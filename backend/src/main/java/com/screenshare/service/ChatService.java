@@ -149,6 +149,11 @@ public class ChatService {
             throw new RuntimeException("Only the room owner can invite others");
         }
 
+        // Check if user is already a member of the room
+        if (chatRoom.isMember(invitedUser)) {
+            throw new RuntimeException("User is already a member of this room");
+        }
+
         // Check if invite already exists
         Optional<ChatInvite> existingInvite = chatInviteRepository.findPendingInvite(chatRoom.getId(), invitedUserId);
         if (existingInvite.isPresent()) {
@@ -329,5 +334,32 @@ public class ChatService {
     // Save a simple text message
     public ChatMessage saveTextMessage(Long roomId, Long senderId, String content) {
         return saveMessage(roomId, senderId, content, MessageType.TEXT);
+    }
+
+    // Leave a private room (or public room)
+    public void leaveRoom(Long roomId, Long userId) {
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+
+        if (!room.getIsActive()) {
+            throw new RuntimeException("Room is not active");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
+        // Use repository query to check membership (handles lazy loading)
+        if (!chatRoomRepository.isUserMemberOfRoom(roomId, userId)) {
+            throw new RuntimeException("User is not a member of this room");
+        }
+
+        // Cannot leave if you're the creator (must transfer ownership or delete room)
+        if (room.getCreatedBy() != null && room.getCreatedBy().getId().equals(userId)) {
+            throw new RuntimeException("Room creator cannot leave the room");
+        }
+
+        // Remove user from room
+        room.removeMember(user);
+        chatRoomRepository.save(room);
     }
 }
