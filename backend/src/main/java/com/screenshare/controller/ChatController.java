@@ -56,6 +56,7 @@ public class ChatController {
                                 case CHAT -> msgType = MessageType.TEXT;
                                 case JOIN -> msgType = MessageType.SYSTEM;
                                 case LEAVE -> msgType = MessageType.SYSTEM;
+                                case SYSTEM -> msgType = MessageType.SYSTEM;
                                 default -> msgType = MessageType.TEXT;
                             }
                         } catch (Exception e) {
@@ -305,7 +306,7 @@ public class ChatController {
         private LocalDateTime timestamp;
 
         public enum MessageType {
-            CHAT, JOIN, LEAVE
+            CHAT, JOIN, LEAVE, SYSTEM
         }
 
         // Getters and setters

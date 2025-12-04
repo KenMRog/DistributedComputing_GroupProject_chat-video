@@ -12,6 +12,7 @@ import {
   Chat as ChatIcon,
   Person as PersonIcon,
 } from '@mui/icons-material';
+import { useTheme } from '../context/ThemeContext';
 
 const ScreenShareView = ({ 
   activeShares, 
@@ -20,6 +21,7 @@ const ScreenShareView = ({
   currentUser,
   chatRoom 
 }) => {
+  const { theme } = useTheme();
   const [selectedShareId, setSelectedShareId] = useState(null);
   const mainVideoRef = useRef(null);
   const thumbnailRefs = useRef({});
@@ -33,7 +35,7 @@ const ScreenShareView = ({
     }
   }, [activeShares, selectedShareId, currentUser?.id]);
 
-  // Update main video when selection changes
+  // Update main video when selection changes or streams update
   useEffect(() => {
     if (mainVideoRef.current && selectedShareId) {
       const selectedShare = activeShares.find(s => s.userId === selectedShareId);
@@ -47,13 +49,22 @@ const ScreenShareView = ({
       }
       
       if (streamToUse) {
-        mainVideoRef.current.srcObject = streamToUse;
+        // Only update if the stream has changed to avoid unnecessary re-renders
+        if (mainVideoRef.current.srcObject !== streamToUse) {
+          mainVideoRef.current.srcObject = streamToUse;
+        }
         // Ensure video plays
         mainVideoRef.current.play().catch(err => {
           console.error('Error playing video:', err);
+          // Retry playing after a short delay
+          setTimeout(() => {
+            if (mainVideoRef.current && mainVideoRef.current.srcObject === streamToUse) {
+              mainVideoRef.current.play().catch(() => {});
+            }
+          }, 100);
         });
-      } else if (mainVideoRef.current) {
-        // Clear video if stream is not available
+      } else if (mainVideoRef.current && mainVideoRef.current.srcObject) {
+        // Only clear if there was a stream before
         mainVideoRef.current.srcObject = null;
       }
     }
@@ -64,7 +75,16 @@ const ScreenShareView = ({
     activeShares.forEach(share => {
       const ref = thumbnailRefs.current[share.userId];
       if (ref && share.stream) {
-        ref.srcObject = share.stream;
+        // Only update if the stream has changed
+        if (ref.srcObject !== share.stream) {
+          ref.srcObject = share.stream;
+          ref.play().catch(err => {
+            console.error('Error playing thumbnail video:', err);
+          });
+        }
+      } else if (ref && !share.stream) {
+        // Clear if stream is no longer available
+        ref.srcObject = null;
       }
     });
   }, [activeShares]);
@@ -80,9 +100,9 @@ const ScreenShareView = ({
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1a1a1a' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: theme.palette.background.default }}>
       {/* Header */}
-      <Paper sx={{ p: 2, borderRadius: 0, bgcolor: '#2d2d2d', color: 'white' }}>
+      <Paper sx={{ p: 2, borderRadius: 0, bgcolor: theme.palette.background.paper, color: theme.palette.text.primary }}>
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Box display="flex" alignItems="center" gap={2}>
             <Typography variant="h6">
@@ -97,7 +117,7 @@ const ScreenShareView = ({
           <Tooltip title="Back to Chat">
             <IconButton 
               onClick={onBackToChat}
-              sx={{ color: 'white' }}
+              sx={{ color: theme.palette.text.primary }}
             >
               <ChatIcon />
             </IconButton>
@@ -135,9 +155,17 @@ const ScreenShareView = ({
                       } else if (share && share.stream) {
                         streamToUse = share.stream;
                       }
-                      if (streamToUse) {
+                      if (streamToUse && el.srcObject !== streamToUse) {
                         el.srcObject = streamToUse;
-                        el.play().catch(err => console.error('Error playing video:', err));
+                        el.play().catch(err => {
+                          console.error('Error playing video:', err);
+                          // Retry after a short delay
+                          setTimeout(() => {
+                            if (el && el.srcObject === streamToUse) {
+                              el.play().catch(() => {});
+                            }
+                          }, 100);
+                        });
                       }
                     }
                   }}
@@ -152,9 +180,9 @@ const ScreenShareView = ({
                   }}
                 />
               ) : (
-                <Box sx={{ textAlign: 'center', color: 'white', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <PersonIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5 }} />
-                  <Typography variant="body1" sx={{ opacity: 0.7 }}>
+                <Box sx={{ textAlign: 'center', color: theme.palette.text.primary, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <PersonIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5, color: theme.palette.text.secondary }} />
+                  <Typography variant="body1" sx={{ opacity: 0.7, color: theme.palette.text.secondary }}>
                     Connecting to {selectedShare.username || selectedShare.displayName || `User ${selectedShare.userId}`}...
                   </Typography>
                 </Box>
@@ -165,8 +193,8 @@ const ScreenShareView = ({
                   position: 'absolute',
                   bottom: 16,
                   left: 16,
-                  bgcolor: 'rgba(0, 0, 0, 0.7)',
-                  color: 'white',
+                  bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.9)',
+                  color: theme.palette.text.primary,
                   px: 2,
                   py: 1,
                   borderRadius: 1,
@@ -190,9 +218,9 @@ const ScreenShareView = ({
               </Box>
             </>
           ) : (
-            <Box sx={{ textAlign: 'center', color: 'white' }}>
-              <PersonIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5 }} />
-              <Typography variant="h6" sx={{ opacity: 0.7 }}>
+            <Box sx={{ textAlign: 'center', color: theme.palette.text.primary }}>
+              <PersonIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5, color: theme.palette.text.secondary }} />
+              <Typography variant="h6" sx={{ opacity: 0.7, color: theme.palette.text.secondary }}>
                 No screen selected
               </Typography>
             </Box>
@@ -211,14 +239,14 @@ const ScreenShareView = ({
                 height: 8,
               },
               '&::-webkit-scrollbar-track': {
-                bgcolor: '#2d2d2d',
+                bgcolor: theme.palette.background.paper,
                 borderRadius: 1,
               },
               '&::-webkit-scrollbar-thumb': {
-                bgcolor: '#555',
+                bgcolor: theme.palette.mode === 'dark' ? '#555' : '#ccc',
                 borderRadius: 1,
                 '&:hover': {
-                  bgcolor: '#666',
+                  bgcolor: theme.palette.mode === 'dark' ? '#666' : '#aaa',
                 },
               },
             }}
@@ -263,8 +291,8 @@ const ScreenShareView = ({
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    bgcolor: 'rgba(0, 0, 0, 0.7)',
-                    color: 'white',
+                    bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.9)',
+                    color: theme.palette.text.primary,
                     px: 1,
                     py: 0.5,
                     display: 'flex',
@@ -329,8 +357,8 @@ const ScreenShareView = ({
                 bottom: 0,
                 left: 0,
                 right: 0,
-                bgcolor: 'rgba(0, 0, 0, 0.7)',
-                color: 'white',
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.9)',
+                color: theme.palette.text.primary,
                 px: 1,
                 py: 0.5,
                 display: 'flex',

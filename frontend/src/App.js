@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import CssBaseline from '@mui/material/CssBaseline';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Typography, Button, AppBar, Toolbar, IconButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, Button, AppBar, Toolbar, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import { Logout as LogoutIcon, Person as PersonIcon, Info as InfoIcon, LightMode as LightModeIcon, DarkMode as DarkModeIcon } from '@mui/icons-material';
 import ChatSidebar from './components/ChatSidebar';
 import ChatMain from './components/ChatMain';
@@ -10,6 +10,7 @@ import AuthGuard from './components/AuthGuard';
 import { SocketProvider } from './context/SocketContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { StreamProvider, useStream } from './context/StreamContext';
 import logoNoText from './static/logonotext.png';
 import './App.css';
 import About from './components/About';
@@ -19,6 +20,9 @@ function AppContent() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const { user, logout } = useAuth();
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [leaveRoomConfirmOpen, setLeaveRoomConfirmOpen] = useState(false);
+  const [pendingChat, setPendingChat] = useState(null);
+  const { isStreaming, stopStreaming } = useStream();
 
   const { mode, toggleTheme } = useTheme();
 
@@ -39,7 +43,38 @@ function AppContent() {
   };
 
   const handleChatSelect = (chat) => {
+    // If user is streaming and trying to switch to a different room, show confirmation
+    if (isStreaming && selectedChat && chat.id !== selectedChat.id) {
+      setPendingChat(chat);
+      setLeaveRoomConfirmOpen(true);
+      return;
+    }
+    
+    // If user is streaming but trying to go back to the same room, allow it
+    if (isStreaming && selectedChat && chat.id === selectedChat.id) {
+      setSelectedChat(chat);
+      return;
+    }
+    
+    // Normal chat selection when not streaming
     setSelectedChat(chat);
+  };
+  
+  const confirmLeaveRoom = () => {
+    // Stop streaming before switching rooms
+    if (isStreaming) {
+      stopStreaming();
+    }
+    setLeaveRoomConfirmOpen(false);
+    if (pendingChat) {
+      setSelectedChat(pendingChat);
+      setPendingChat(null);
+    }
+  };
+  
+  const cancelLeaveRoom = () => {
+    setLeaveRoomConfirmOpen(false);
+    setPendingChat(null);
   };
 
   const handleOpenAbout = () => setAboutOpen(true);
@@ -164,6 +199,22 @@ function AppContent() {
           <Button onClick={confirmLogout} color="primary" variant="contained">Logout</Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={leaveRoomConfirmOpen} onClose={cancelLeaveRoom}>
+        <DialogTitle>Leave Chatroom While Streaming?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You are currently sharing your screen in this chatroom. If you leave, your stream will end. 
+            Are you sure you want to leave?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelLeaveRoom}>Cancel</Button>
+          <Button onClick={confirmLeaveRoom} color="primary" variant="contained">
+            Leave and Stop Streaming
+          </Button>
+        </DialogActions>
+      </Dialog>
     </motion.div>
   );
 }
@@ -175,7 +226,9 @@ function App() {
       <AuthProvider>
         <AuthGuard>
           <SocketProvider>
-            <AppContent />
+            <StreamProvider>
+              <AppContent />
+            </StreamProvider>
           </SocketProvider>
         </AuthGuard>
       </AuthProvider>
