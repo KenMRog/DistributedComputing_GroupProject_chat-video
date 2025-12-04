@@ -36,6 +36,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useScreenShare } from '../hooks/useScreenShare';
 import ScreenShareView from './ScreenShareView';
+import { formatTime, formatDateTimeLocal } from '../utils/timeUtils';
 
 const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
   const [messages, setMessages] = useState([]);
@@ -149,6 +150,10 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     const chatSub = subscribe(chatTopic, (msg) => {
       try {
         const received = JSON.parse(msg.body);
+        // Ensure timestamp is set (use current time if not provided)
+        if (!received.timestamp) {
+          received.timestamp = new Date().toISOString();
+        }
         setMessages((prev) => [...prev, received]);
       } catch (err) {
         console.error('Error parsing chat message:', err);
@@ -530,7 +535,12 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
                     {msg.content}
                   </Paper>
                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                    {msg.timestamp && new Date(msg.timestamp).toLocaleTimeString()}
+                    {msg.timestamp ? (() => {
+                      const msgDate = new Date(msg.timestamp);
+                      const now = new Date();
+                      const isToday = msgDate.toDateString() === now.toDateString();
+                      return isToday ? formatTime(msg.timestamp) : formatDateTimeLocal(msg.timestamp);
+                    })() : ''}
                   </Typography>
                 </Box>
               </ListItem>
@@ -545,7 +555,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
         <Box display="flex" gap={1}>
           <TextField
             fullWidth
-            placeholder="iMessage"
+            placeholder="Message"
             multiline
             maxRows={4}
             value={newMessage}
