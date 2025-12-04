@@ -72,6 +72,13 @@ const ScreenShareView = ({
   const selectedShare = activeShares.find(s => s.userId === selectedShareId);
   const thumbnailShares = activeShares.filter(s => s.userId !== selectedShareId);
 
+  // Helper to safely get the first character of a value (handles numbers/objects)
+  const firstChar = (val) => {
+    if (val === undefined || val === null) return '';
+    const s = typeof val === 'string' ? val : String(val);
+    return s.charAt(0).toUpperCase();
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1a1a1a' }}>
       {/* Header */}
@@ -169,7 +176,7 @@ const ScreenShareView = ({
                 }}
               >
                 <Avatar sx={{ width: 24, height: 24, bgcolor: 'primary.main' }}>
-                  {(selectedShare.username || selectedShare.userId).charAt(0).toUpperCase()}
+                  {firstChar(selectedShare.username || selectedShare.userId)}
                 </Avatar>
                 <Typography variant="body2">
                   {selectedShare.username || selectedShare.displayName || `User ${selectedShare.userId}`}
@@ -266,7 +273,7 @@ const ScreenShareView = ({
                   }}
                 >
                   <Avatar sx={{ width: 16, height: 16, bgcolor: 'primary.main', fontSize: 10 }}>
-                    {(share.username || share.userId).charAt(0).toUpperCase()}
+                    {firstChar(share.username || share.userId)}
                   </Avatar>
                   <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
                     {share.username || share.displayName || `User ${share.userId}`}
@@ -332,7 +339,7 @@ const ScreenShareView = ({
               }}
             >
               <Avatar sx={{ width: 16, height: 16, bgcolor: 'primary.main', fontSize: 10 }}>
-                {(currentUser?.username || currentUser?.name || 'You').charAt(0).toUpperCase()}
+                {firstChar(currentUser?.username || currentUser?.name || 'You')}
               </Avatar>
               <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
                 You (Your Screen)
