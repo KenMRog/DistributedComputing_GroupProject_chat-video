@@ -12,5 +12,5 @@ public enum MessageType {
     LINK            // Shared link
 }
 
-
+// only text is supported for now
 

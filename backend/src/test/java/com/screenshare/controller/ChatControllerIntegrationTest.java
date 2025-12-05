@@ -36,7 +36,6 @@ public class ChatControllerIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        // Rely on create-drop to provide a fresh schema; insert minimal test user
         alice = new User("alice2", "alice2@example.com", "password");
         userRepository.save(alice);
     }

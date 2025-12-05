@@ -77,6 +77,7 @@ public class ChatMessage {
     private LocalDateTime deletedAt;
 
     // Read receipts - users who have read this message
+    // If we want to implement this later 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "message_read_receipts",

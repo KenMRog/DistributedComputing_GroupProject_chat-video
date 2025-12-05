@@ -14,9 +14,7 @@ const ScreenShare = ({ username, targetUser }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
 
-  /** -----------------------------
-   *  Handle incoming signaling
-   --------------------------------*/
+ 
   useEffect(() => {
     if (!connected) return;
 
@@ -35,25 +33,19 @@ const ScreenShare = ({ username, targetUser }) => {
     };
   }, [connected, username]);
 
-  /** -----------------------------
-   *  Update remote video element when stream changes
-   --------------------------------*/
+// Set remote video stream when it changes
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
   }, [remoteStream]);
 
-  /** -----------------------------
-   *  Send STOMP signaling message
-   --------------------------------*/
+ // send STOMP message
   const sendSignal = (signal) => {
     sendMessage("/app/screenshare.signal", signal);
   };
 
-  /** -----------------------------
-   *  Incoming WebRTC signal handler
-   --------------------------------*/
+  // handle incoming signaling messages
   const handleSignal = (signal) => {
     const { type, from, data } = signal;
 
@@ -82,9 +74,7 @@ const ScreenShare = ({ username, targetUser }) => {
     }
   };
 
-  /** -----------------------------
-   *  Create Peer
-   --------------------------------*/
+  // create peer connection
   const createPeer = (initiator) => {
     console.log("🛠 Creating peer. Initiator:", initiator);
 
@@ -116,9 +106,7 @@ const ScreenShare = ({ username, targetUser }) => {
     peerRef.current = peer;
   };
 
-  /** -----------------------------
-   *  Presenter: Start sharing screen
-   --------------------------------*/
+ // start screen sharing
   const startShare = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -134,15 +122,14 @@ const ScreenShare = ({ username, targetUser }) => {
       createPeer(true); // initiator = presenter
 
     } catch (err) {
-      console.error("❌ Screen share failed:", err);
+      console.error(" Screen share failed:", err);
     }
   };
 
-  /** -----------------------------
-   *  Stop sharing (local or remote)
-   --------------------------------*/
+  // stop sharing (local or remote)
+
   const stopShare = (remoteEnded = false) => {
-    console.log("🛑 Stop sharing");
+    console.log("Stop sharing");
 
     if (peerRef.current) {
       peerRef.current.destroy();
@@ -166,9 +153,7 @@ const ScreenShare = ({ username, targetUser }) => {
     setRemoteStream(null);
   };
 
-  /** -----------------------------
-   *  UI
-   --------------------------------*/
+
   return (
     <Box sx={{ mt: 2 }}>
       <Typography variant="h6">Screen Sharing</Typography>

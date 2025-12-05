@@ -31,7 +31,6 @@ public class AzureConfig {
 
     /**
      * Creates a Service Bus Sender Client for sending messages to a queue
-     * This replaces AWS SQS functionality
      * Only created if connection string is configured
      */
     @Bean
@@ -52,7 +51,6 @@ public class AzureConfig {
 
     /**
      * Creates a Service Bus Sender Client for publishing messages to a topic
-     * This replaces AWS SNS functionality
      * Only created if connection string is configured
      */
     @Bean
@@ -73,7 +71,7 @@ public class AzureConfig {
 
     /**
      * Creates a Blob Service Client for Azure Blob Storage
-     * This can be used for storing screen share recordings or file uploads
+     * This will be used if we do file uploads, images etc
      * Only created if connection string is configured
      */
     @Bean

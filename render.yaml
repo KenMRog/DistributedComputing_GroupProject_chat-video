@@ -1,6 +1,3 @@
-# Render Blueprint Configuration
-# This file allows you to define all services in one place
-# Optional - you can also create services manually in the dashboard
 
 services:
   # Backend Service
@@ -18,9 +15,7 @@ services:
         value: 8080
       - key: ALLOWED_ORIGINS
         value: https://gatherly-frontend.onrender.com,http://localhost:3000
-      # Add your database and other environment variables here
-      # Or set them in the Render dashboard after creating the service
-
+     
   # Frontend Service
   - type: web
     name: gatherly-frontend
@@ -30,9 +25,3 @@ services:
     envVars:
       - key: REACT_APP_API_URL
         value: https://gatherly-backend.onrender.com/api
-        # Update this with your actual backend URL after deployment
-
-# Note: This file is optional. You can create services manually in the dashboard.
-# If using this file, deploy via: render.yaml (Render will read this file)
-# Or use the dashboard for more control over individual services.
-

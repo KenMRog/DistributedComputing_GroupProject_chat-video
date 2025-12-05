@@ -144,7 +144,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     };
   }, [chatRoom?.id, localStream, user?.id, username, sharingRoomIdRef, localStreamRef]);
 
-  // Subscribe to chat and screen share notifications
+  // Subscribe to chat and screen share notifications (not implemented yet)
   useEffect(() => {
     if (!connected || !subscribe || !chatRoom?.id || !chatTopic || !user?.id) return;
 
@@ -154,7 +154,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     const chatSub = subscribe(chatTopic, (msg) => {
       try {
         const received = JSON.parse(msg.body);
-        // Ensure timestamp is set (use current time if not provided)
+        // Ensure timestamp is set
         if (!received.timestamp) {
           received.timestamp = new Date().toISOString();
         }
@@ -404,7 +404,7 @@ const ChatComponent = ({ chatRoom, onLeaveRoom }) => {
     });
   };
 
-  // --- UI ---
+  
   // Show screen share view if active and view mode is set
   // Use ref if state was lost
   const streamForView = localStream || localStreamRef.current;

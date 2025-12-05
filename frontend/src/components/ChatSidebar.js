@@ -113,7 +113,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, refreshKey }) =>
     }
   }, [user?.id, refreshKey]);
 
-  // Subscribe to real-time invite notifications
+  // Subscribe to real-time invite notifications (not implemented yet)
   useEffect(() => {
     if (!connected || !subscribe || !user?.id) return;
 
@@ -511,7 +511,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, refreshKey }) =>
           <Button onClick={() => setNewRoomDialogOpen(false)}>Cancel</Button>
           <Button onClick={async () => {
             // Create room via backend
-            if (!user?.id) return; // Early return if user is null
+            if (!user?.id) return; 
             try {
               const payload = {
                 name: newRoomName,

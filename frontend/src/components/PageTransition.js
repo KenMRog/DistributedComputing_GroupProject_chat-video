@@ -25,7 +25,6 @@ const pageTransition = {
 
 /**
  * PageTransition wrapper component for smooth page transitions
- * Provides fade-in and subtle slide animations
  */
 const PageTransition = ({ children, className = '' }) => {
   return (

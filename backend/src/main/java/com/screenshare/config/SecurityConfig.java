@@ -12,6 +12,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 /**
  * Security Configuration
  * Disables authentication to allow open access to the application
+ * Used for development and testing purposes
  */
 @Configuration
 @EnableWebSecurity
@@ -23,7 +24,7 @@ public class SecurityConfig {
             // Enable CORS so the CorsConfigurationSource bean is used
             .cors().and()
 
-            // Disable CSRF protection (useful for APIs and WebSocket connections)
+            // Disable CSRF protection 
             .csrf(AbstractHttpConfigurer::disable)
             
             // Allow all requests without authentication

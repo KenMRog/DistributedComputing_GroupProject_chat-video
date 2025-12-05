@@ -56,7 +56,7 @@ public class AuthResponse {
         this.token = token;
     }
     
-    // Static factory methods
+   
     public static AuthResponse success(String message, User user) {
         AuthResponse response = new AuthResponse(true, message);
         response.setUser(new UserData(user));

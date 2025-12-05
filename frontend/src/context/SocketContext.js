@@ -36,7 +36,7 @@ export const SocketProvider = ({ children }) => {
       webSocketFactory: () => new SockJS(socketUrl),
       reconnectDelay: 5000, // Try reconnecting every 5 seconds if disconnected
       onConnect: (frame) => {
-        console.log('✅ Connected to WebSocket:', frame);
+        console.log('Connected to WebSocket:', frame);
         setConnected(true);
         setStompClient(client);
         
@@ -46,19 +46,18 @@ export const SocketProvider = ({ children }) => {
             destination: '/app/screenshare.register',
             body: username
           });
-          console.log('📝 Registered username:', username);
+          console.log(' Registered username:', username);
         }
       },
       onDisconnect: () => {
-        console.warn('⚠️ Disconnected from WebSocket');
+        console.warn('Disconnected from WebSocket');
         setConnected(false);
         setStompClient(null);
       },
       onStompError: (frame) => {
-        console.error('❌ STOMP Error:', frame.headers['message'], frame.body);
+        console.error('STOMP Error:', frame.headers['message'], frame.body);
       },
       debug: (msg) => {
-        // Optional: comment this line out to reduce console spam
         if (!msg.includes('PING')) console.log('STOMP Debug:', msg);
       },
     });
@@ -66,7 +65,7 @@ export const SocketProvider = ({ children }) => {
     client.activate();
 
     return () => {
-      console.log('🛑 Disconnecting WebSocket...');
+      console.log('Disconnecting WebSocket...');
       client.deactivate();
     };
   }, []);
@@ -75,7 +74,7 @@ export const SocketProvider = ({ children }) => {
     if (stompClient && connected) {
       stompClient.publish({ destination, body: JSON.stringify(body) });
     } else {
-      console.error('❌ Cannot send message — not connected');
+      console.error('Cannot send message — not connected');
     }
   };
 
@@ -83,7 +82,7 @@ export const SocketProvider = ({ children }) => {
     if (stompClient && connected) {
       return stompClient.subscribe(destination, callback);
     }
-    console.warn('⚠️ Tried to subscribe before connection established');
+    console.warn('Tried to subscribe before connection established');
     return null;
   };
 

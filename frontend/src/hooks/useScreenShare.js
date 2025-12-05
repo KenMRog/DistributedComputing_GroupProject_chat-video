@@ -102,7 +102,7 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           console.log('Error ending peer:', endErr.message);
         }
         
-        // Destroy the peer - wrap in additional try-catch for process/stream errors
+        // Destroy the peer 
         try {
           peerToClean.destroy();
         } catch (destroyErr) {
@@ -258,11 +258,11 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
       });
 
       newPeer.on('error', (err) => {
-        console.error('❌ Peer connection error (initiator):', err);
+        console.error(' Peer connection error (initiator):', err);
       });
 
       newPeer.on('close', () => {
-        console.log('🔌 Peer connection closed (initiator)');
+        console.log('Peer connection closed (initiator)');
         if (isScreensharing && localStream) {
           try {
             stopScreenShare();
@@ -468,7 +468,7 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           });
 
           responder.on('stream', (remoteStream) => {
-            console.log('📺 Received remote screen stream from user', body.fromUserId);
+            console.log('Received remote screen stream from user', body.fromUserId);
             setActiveShares(prev => {
               const existingShare = prev.find(s => s.userId === body.fromUserId);
               if (existingShare) {
@@ -491,11 +491,11 @@ export const useScreenShare = (chatRoom, activeShares, setActiveShares) => {
           });
 
           responder.on('error', (err) => {
-            console.error('❌ Peer connection error:', err);
+            console.error('Peer connection error:', err);
           });
 
           responder.on('close', () => {
-            console.log('🔌 Peer connection closed for user', body.fromUserId);
+            console.log(' Peer connection closed for user', body.fromUserId);
             setActiveShares(prev => {
               const share = prev.find(s => s.userId === body.fromUserId);
               if (share?.peer) {

@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 /**
  * Service for sending messages using Azure Service Bus
- * This replaces AWS SQS and SNS functionality
  * Only created if Azure Service Bus connection string is configured
  */
 @Service
@@ -35,9 +34,6 @@ public class AzureMessageService {
 
     /**
      * Send a message to the Azure Service Bus Queue
-     * This is similar to AWS SQS sendMessage
-     * 
-     * @param messageBody The message content
      */
     public void sendToQueue(String messageBody) {
         try {
@@ -52,9 +48,6 @@ public class AzureMessageService {
 
     /**
      * Publish a message to the Azure Service Bus Topic
-     * This is similar to AWS SNS publish
-     * 
-     * @param messageBody The message content
      */
     public void publishToTopic(String messageBody) {
         try {
@@ -69,10 +62,6 @@ public class AzureMessageService {
 
     /**
      * Send a message with custom properties
-     * 
-     * @param messageBody The message content
-     * @param subject The message subject/type
-     * @param properties Additional custom properties
      */
     public void sendToQueueWithProperties(String messageBody, String subject, 
                                           java.util.Map<String, Object> properties) {
@@ -95,10 +84,6 @@ public class AzureMessageService {
 
     /**
      * Publish a message to topic with custom properties
-     * 
-     * @param messageBody The message content
-     * @param subject The message subject/type
-     * @param properties Additional custom properties
      */
     public void publishToTopicWithProperties(String messageBody, String subject,
                                              java.util.Map<String, Object> properties) {

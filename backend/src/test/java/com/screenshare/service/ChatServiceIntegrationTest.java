@@ -46,7 +46,6 @@ public class ChatServiceIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        // With create-drop DDL the schema is created for each test context; no need to delete existing rows.
         alice = new User("alice", "alice@example.com", "password");
         bob = new User("bob", "bob@example.com", "password");
         userRepository.save(alice);

@@ -353,7 +353,7 @@ public class ChatService {
             throw new RuntimeException("User is not a member of this room");
         }
 
-        // Cannot leave if you're the creator (must transfer ownership or delete room)
+        // Cannot leave if you're the creator 
         if (room.getCreatedBy() != null && room.getCreatedBy().getId().equals(userId)) {
             throw new RuntimeException("Room creator cannot leave the room");
         }

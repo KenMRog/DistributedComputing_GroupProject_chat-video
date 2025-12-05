@@ -54,7 +54,7 @@ public class ChatRoom {
     )
     private Set<User> members = new HashSet<>();
 
-    // Admins/moderators of the room
+    // Admins of the room
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "chat_room_admins",
