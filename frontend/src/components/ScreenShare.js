@@ -55,7 +55,7 @@ const ScreenShare = ({ username, targetUser }) => {
 
     switch (type) {
       case "offer":
-        // Viewer receives offer → create peer (not initiator)
+        // Viewer receives offer → create peer 
         createPeer(false);
         peerRef.current.signal(JSON.parse(data));
         break;
@@ -100,8 +100,8 @@ const ScreenShare = ({ username, targetUser }) => {
       setRemoteStream(stream);
     });
 
-    peer.on("close", () => console.log("🔌 Peer connection closed"));
-    peer.on("error", (err) => console.error("❌ Peer error:", err));
+    peer.on("close", () => console.log("Peer connection closed"));
+    peer.on("error", (err) => console.error(" Peer error:", err));
 
     peerRef.current = peer;
   };

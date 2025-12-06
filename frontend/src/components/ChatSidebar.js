@@ -113,7 +113,7 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, refreshKey }) =>
     }
   }, [user?.id, refreshKey]);
 
-  // Subscribe to real-time invite notifications (not implemented yet)
+  // Subscribe to real-time invite notifications via WebSocket
   useEffect(() => {
     if (!connected || !subscribe || !user?.id) return;
 
